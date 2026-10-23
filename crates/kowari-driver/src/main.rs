@@ -15,7 +15,11 @@ struct Args {
 
 fn main() -> anyhow::Result<()> {
     let args = Args::parse();
-    println!("kowaric: input = {}, output = {:?}", args.input.display(), args.output);
+    println!(
+        "kowaric: input = {}, output = {:?}",
+        args.input.display(),
+        args.output
+    );
     // Pipeline wiring arrives in M1a.
     Ok(())
 }
