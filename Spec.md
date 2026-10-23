@@ -1,4 +1,4 @@
-# SPEC.md` — Kowari Language Specification
+# SPEC.md — Kowari Language Specification
 
 > **Kowari.** Status: **design, v0.** This document is the authoritative record of design decisions. Planning, milestones, and implementation sequencing live in `PLANNING.md`.
 
