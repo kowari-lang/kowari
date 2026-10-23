@@ -9,7 +9,7 @@ pub struct Span {
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct DiagCode(pub &'static str); // e.g. "E0142"
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Diag {
     pub code: DiagCode,
     pub span: Span,
