@@ -1,0 +1,555 @@
+// tour.kowari — Kowari language tour (v0 spec)
+// Build: kowaric tour.kowari -o tour && ./tour
+//
+// Every example below is written to be valid under SPEC.md §4 (affine
+// resources, function-scoped refs, unique &mut, exact-match ?, Mutex-only
+// shared mutation). Anything that violates a rule is in the COMPILE_FAIL
+// gallery at the bottom, commented out.
+//
+// THREE THINGS TO READ FIRST:
+//
+// (a) §4.2 vs string literals. §4.2 forbids returning references, but §11.1
+//     makes literals `&str`, and §15.1 leaves the grammar open. Proposed
+//     carve-out, used throughout: a `&str` that borrows *static literal
+//     storage* has no owner to dangle from, so it may be stored and
+//     returned. The §4.2 ban applies to borrows of *locals*. The compiler
+//     needs literal provenance to enforce this — flagging it now.
+//
+// (b) `Error` (§12.4) contains a `String`, so `Error` is an owning type and
+//     therefore affine under §4.1. Every `Error` must be consumed too. You
+//     can see this at the `recv` match below. It is a real ergonomics cost
+//     of §12.4 that the spec doesn't call out.
+//
+// (c) Syntax marked [INVENTED] is my guess at §15.1. Full list at the end.
+
+use std::vec::Vec;
+use std::string::String;
+use std::sync::{Mutex, mpsc};
+use std::thread;
+use std::mem;
+use std::alloc::{Allocator, GeneralPurposeAllocator, ArenaAllocator};
+
+// ─────────────────────────────────────────────────────────────────────────
+// §1 / §7.3 — Hello, world
+// `main` has no return type (per your call). See the alternative form at the
+// bottom of this section if a demo needs `?` at top level.
+// ─────────────────────────────────────────────────────────────────────────
+
+fn hello() {
+    println!("hello, kowari");
+}
+
+// §7.2 alternative entry point, when `?` is wanted at top level:
+//
+//   fn main() -> Result<(), Error> {
+//       let port = read_port("PORT")?;   // Error == Error, exact match
+//       println!("{}", port);
+//       Ok(())
+//   }
+
+// ─────────────────────────────────────────────────────────────────────────
+// §4.3 — Mutability is opt-in, and there are no implicit conversions
+// ─────────────────────────────────────────────────────────────────────────
+
+fn mutability() {
+    let x = 1;          // immutable binding
+    // x = 2;           // E0102: cannot assign to immutable binding
+
+    let mut y = 1;
+    y += 1;             // compound assignment, built-in types only (§11.3)
+
+    // y += 1u8;        // E0102: u8 vs i64 — no implicit conversion (§3)
+    // y = y + 1u8;     // E0102: same reason; write `1u8 as i64` [INVENTED]
+
+    println!("x={} y={}", x, y);
+}
+
+// ─────────────────────────────────────────────────────────────────────────
+// §11.2 — Integers: overflow panics, explicit opt-outs
+// ─────────────────────────────────────────────────────────────────────────
+
+fn integers() {
+    let a: u8 = 250;
+
+    let b = a +% 10;    // wrapping   → (250 + 10) mod 256 = 4
+    let c = a +? 10;    // checked    → None
+    let d = a +| 10;    // saturating → 255
+    // let e = a + 10;  // panics at runtime (§7.3), both debug and release
+
+    println!("{}", b);
+    match c {
+        Some(v) => println!("{}", v),
+        None => println!("overflow"),
+    }
+    println!("{}", d);
+}
+
+// ─────────────────────────────────────────────────────────────────────────
+// §8 — Pattern matching: exhaustive, no fallthrough, returns a value
+// ─────────────────────────────────────────────────────────────────────────
+
+enum Shape {
+    Circle(f64),
+    Rect { w: f64, h: f64 },
+    Empty,
+}
+
+fn area(s: Shape) -> f64 {
+    // Exhaustive by construction — no `_` needed for an enum.
+    match s {
+        Shape::Circle(r) => 3.14159 * r * r,
+        Shape::Rect { w, h } => w * h,
+        Shape::Empty => 0.0,
+    }
+}
+
+// Integer matches require a `_` wildcard (§8). Returning a literal-backed
+// `&str` uses the carve-out from note (a).
+fn classify(n: i32) -> &str {
+    match n {
+        0 => "zero",
+        1..=9 => "small",
+        _ => "large",
+    }
+}
+
+fn patterns() {
+    println!("area = {}", area(Shape::Rect { w: 2.0, h: 3.0 }));
+    println!("{} is {}", 7, classify(7));
+    println!("{} is {}", 42, classify(42));
+
+    // §8: `if let` and `let else` are sugar over match.
+    let opt: Option<i32> = Some(5);
+    if let Some(v) = opt {
+        println!("if-let {}", v);
+    }
+    let Some(w) = opt else {
+        panic!("unreachable here");
+    };
+    println!("let-else {}", w);
+}
+
+// ─────────────────────────────────────────────────────────────────────────
+// §5.1 — defer runs on every scope exit, in LIFO order
+// ─────────────────────────────────────────────────────────────────────────
+
+fn defer_order() {
+    defer println!("first registered");   // runs second
+    defer println!("second registered");  // runs first
+    println!("body");
+    // also runs on `?`, `break`, `continue` — but NOT on panic (§5.1)
+}
+
+// ─────────────────────────────────────────────────────────────────────────
+// §4.1 / §5.2 — Affine resources: `deinit(self)` consumes
+//
+// NOTE: SPEC §5's own example writes `let v = Vec::init(alloc)` and then
+// `v.append(1)`, which contradicts §4.3 (immutable by default). I use
+// `let mut v` here. One of the two should change — §5's example is the
+// likely typo.
+// ─────────────────────────────────────────────────────────────────────────
+
+fn resources(alloc: Allocator) {
+    let mut v = Vec::init(alloc);   // allocator stored inside the Vec (§5.3)
+    defer v.deinit();               // counts as consumption on every path
+
+    v.append(1);
+    v.append(2);
+    v.append(3);
+
+    // §15.11 consequence: `for x in &mut v` does not exist, and
+    // `v.get(i) -> Option<&T>` cannot exist because refs cannot be
+    // returned. Iteration is index-based (bounds-checked, §4.5) or
+    // closure-driven.
+    let mut i = 0;
+    while i < v.len() {
+        v[i] += 10;
+        i += 1;
+    }
+
+    println!("len = {}", v.len());
+}
+
+// ─────────────────────────────────────────────────────────────────────────
+// §7.2 — Errors as values, `?` is exact-match only
+// ─────────────────────────────────────────────────────────────────────────
+
+enum ConfigError {
+    Missing,
+    BadNumber,
+}
+
+fn parse_digit(c: i32) -> Result<i32, ConfigError> {
+    match c {
+        48..=57 => Ok(c - 48),
+        _ => Err(ConfigError::BadNumber),
+    }
+}
+
+// Both callees return `Result<_, ConfigError>`; the caller returns the same
+// type, so `?` type-checks. No `From`-conversion in v1 (§7.2).
+fn parse_two(a: i32, b: i32) -> Result<i32, ConfigError> {
+    let hi = parse_digit(a)?;
+    let lo = parse_digit(b)?;
+    Ok(hi * 10 + lo)
+}
+
+fn errors() {
+    match parse_two(52, 50) {         // '4','2'
+        Ok(port) => println!("port = {}", port),
+        Err(_) => println!("bad digits"),
+    }
+}
+
+// ─────────────────────────────────────────────────────────────────────────
+// §5.1 / §7.2 — `errdefer` fires only on the error path
+// ─────────────────────────────────────────────────────────────────────────
+
+fn build(alloc: Allocator, ok: bool) -> Result<Vec<u8>, ConfigError> {
+    let mut buf = Vec::init(alloc);
+    errdefer buf.deinit();            // only if we return Err
+
+    buf.append(1);
+    buf.append(2);
+
+    if !ok {
+        return Err(ConfigError::Missing);   // errdefer consumes `buf`
+    }
+    Ok(buf)                                 // moved out; caller owns it now
+}
+
+fn errdefer_demo(alloc: Allocator) {
+    match build(alloc, false) {
+        Ok(v) => { defer v.deinit(); println!("build ok len={}", v.len()); }
+        Err(_) => println!("build failed"),
+    }
+    match build(alloc, true) {
+        Ok(v) => { defer v.deinit(); println!("build ok len={}", v.len()); }
+        Err(_) => println!("build failed"),
+    }
+}
+
+// ─────────────────────────────────────────────────────────────────────────
+// §6 — Allocators are explicit; no global allocator anywhere
+//
+// HAZARD worth a spec note: a `FixedBufferAllocator` over a stack array is a
+// Copy value holding a raw pointer into that array. If a collection outlives
+// the buffer, the affine check does not catch it — the allocator is not a
+// reference. This is the one place §4.2's "no refs in aggregates" doesn't
+// reach. Using a heap-backed arena here instead.
+// ─────────────────────────────────────────────────────────────────────────
+
+fn allocators() {
+    let arena = ArenaAllocator::init();
+    defer arena.deinit();             // bulk-free
+
+    let a = arena.allocator();        // Copy vtable pair (§5.3)
+
+    let mut v = Vec::init(a);
+    defer v.deinit();
+    v.append(1);
+    v.append(2);
+    v.append(3);
+
+    println!("arena: {} {} {}", v[0], v[1], v[2]);
+}
+
+// ─────────────────────────────────────────────────────────────────────────
+// §11.1 — Strings: String (owned, affine) vs &str (borrowed, function-scoped)
+// ─────────────────────────────────────────────────────────────────────────
+
+fn strings(alloc: Allocator) {
+    let mut s = String::init(alloc);
+    defer s.deinit();
+
+    s.push_str("héllo");              // [INVENTED] String API
+
+    let view: &str = s.as_str();      // [INVENTED] borrow of a local — fine
+                                      // inside this function, cannot escape
+    println!("{}", view);
+
+    // Slicing off a char boundary panics (§11.1); on a boundary it's `&str`.
+}
+
+// ─────────────────────────────────────────────────────────────────────────
+// §9 — Generics (monomorphized) + traits + type-set arithmetic constraint
+// ─────────────────────────────────────────────────────────────────────────
+
+// §9.2: generic arithmetic is allowed on the built-in operator set, and only
+// that — this is not user-defined operator overloading.
+fn sum<T: ~int | ~float>(xs: &[T], zero: T) -> T {
+    let mut acc = zero;
+        for i in 0..xs.len() {            // [INVENTED] range-for
+        acc += xs[i];                 // bounds-checked, panics (§4.5)
+    }
+    acc
+}
+
+trait Describe {
+    fn describe(&self) -> &str;       // `&self` is a function-scoped ref param
+}
+
+struct Point {
+    x: i32,
+    y: i32,
+}
+
+impl Describe for Point {
+    fn describe(&self) -> &str {
+        "point"                       // literal-backed, carve-out (a)
+    }
+}
+
+fn generics_traits() {
+    let total = sum(&[1, 2, 3], 0);
+    println!("sum = {}", total);
+
+    let p = Point { x: 1, y: 2 };
+    println!("{} {} {}", p.describe(), p.x, p.y);
+}
+
+// ─────────────────────────────────────────────────────────────────────────
+// §10 — Threads: Mutex<T> is the only shared mutation; guards are affine
+//
+// §15.3 open question: I show the Result-shaped `lock()` (the spec's
+// recommendation) rather than a panicking one.
+//
+// CROSSING FLAG: the closures below borrow `&counter` into children. §10.1
+// says a structured scope joins children at exit, which is exactly what makes
+// that borrow sound; §10.2's "borrows cannot cross thread boundaries" reads
+// as absolute. These need reconciling — I've assumed scope-limited borrows
+// are the sanctioned crossing, since otherwise there is no way to share a
+// Mutex at all without an Arc, which the spec does not have.
+// ─────────────────────────────────────────────────────────────────────────
+
+fn add_one(counter: &Mutex<i64>) {
+    let mut g = match counter.lock() {
+        Ok(g) => g,
+        Err(_) => panic!("mutex poisoned"),   // §7.3: panic = abort
+    };
+    defer g.deinit();                 // releases the lock; guard never escapes
+    *g += 1;
+}
+
+fn threads(alloc: Allocator) {
+    let counter = Mutex::init(alloc, 0i64);   // immutable binding is fine:
+    defer counter.deinit();                   // mutation goes through Mutex
+
+    thread::scope(|s| {
+        s.spawn(|| add_one(&counter));
+        s.spawn(|| add_one(&counter));
+    });                                        // implicit join here
+
+    let g = match counter.lock() {
+        Ok(g) => g,
+        Err(_) => panic!("mutex poisoned"),
+    };
+    println!("counter = {}", *g);
+    g.deinit();
+}
+
+// ─────────────────────────────────────────────────────────────────────────
+// §10 — Channels; note `Error` is affine (see note (b))
+// ─────────────────────────────────────────────────────────────────────────
+
+fn channels(alloc: Allocator) {
+    let (tx, rx) = mpsc::channel(alloc, 8);
+    defer rx.deinit();
+
+    thread::scope(|s| {
+        s.spawn(|| {
+            let tx = tx;              // moved into the child (§10.1: move)
+            defer tx.deinit();        // consumed inside the child
+            match tx.send(42) {
+                Ok(_) => {}
+                Err(_) => panic!("send failed"),
+            }
+        });
+    });
+
+    match rx.recv() {
+        Ok(v) => println!("recv {}", v),
+        Err(e) => {
+            println!("recv error: {}", e.message);
+            e.deinit();               // Error owns a String → affine
+        }
+    }
+}
+
+// ─────────────────────────────────────────────────────────────────────────
+// §4.4 / §12.1 — unsafe: raw C ABI, with a mandatory // SAFETY: line
+// ─────────────────────────────────────────────────────────────────────────
+
+extern "C" fn abs(x: i32) -> i32;
+
+fn call_c(x: i32) -> i32 {
+    // SAFETY: `abs` is libc's int abs. It accepts any i32, returns a valid
+    // i32, allocates nothing, and touches no memory we own.
+    unsafe { abs(x) }
+}
+
+fn unsafe_demo() {
+    println!("abs(-5) = {}", call_c(-5));
+
+    let mut v = Vec::init(GeneralPurposeAllocator::init().allocator());
+    // SAFETY: we deliberately leak `v` for the process lifetime; nothing
+    // observes the freed memory because it is never freed.
+    unsafe { mem::forget(v) };
+}
+
+// ─────────────────────────────────────────────────────────────────────────
+// §12.2 — WASM hosting (not called: needs a real .wasm module)
+// ─────────────────────────────────────────────────────────────────────────
+
+fn host_wasm(bytes: &[u8], alloc: Allocator) -> Result<i32, Error> {
+    let inst = wasm::Instance::load(bytes, alloc)?;
+    defer inst.deinit();
+
+    // Trap → Error::from_wasm_trap, done once inside the wrapper (§12.4).
+    let out: i32 = inst.call("add", (2, 3))?;
+    Ok(out)
+}
+
+// ─────────────────────────────────────────────────────────────────────────
+// COMPILE_FAIL gallery (§14.1) — commented out; split into
+// tests/compile_fail/*.kowari. Codes other than E0142 are PROPOSED.
+// ─────────────────────────────────────────────────────────────────────────
+
+// ── §4.1 leak ─────────────────────────────────────────── E0142 (fixed)
+// fn leak(alloc: Allocator) {
+//     let v = Vec::init(alloc);
+//     v.append(1);
+// }                                  // E0142: resource `v` not consumed
+
+// ── §4.1 / §5.2 double deinit ─────────────────────────── E0143 (proposed)
+// fn twice(alloc: Allocator) {
+//     let v = Vec::init(alloc);
+//     v.deinit();
+//     v.deinit();                    // E0143: use after deinit
+// }
+
+// ── §4.2 reference in an aggregate ────────────────────── E0150 (proposed)
+// struct View { name: &str }        // E0150: references cannot be stored
+
+// ── §4.2 returning a borrow of a local ────────────────── E0151 (proposed)
+// fn bad(alloc: Allocator) -> &str {
+//     let s = String::init(alloc);
+//     defer s.deinit();
+//     s.as_str()                     // E0151: reference would outlive `s`
+// }
+
+// ── §4.2 aliasing &mut across a call without unsafe ───── E0170 (proposed)
+// fn alias() {
+//     let mut x = 1;
+//     let a = &mut x;
+//     let b = &mut x;                // E0170: second &mut in scope
+//     take(a, b);
+// }
+
+// ── §7.2 `?` error-type mismatch ──────────────────────── E0160 (proposed)
+// fn mismatch() -> Result<i32, ConfigError> {
+//     let n = parse_other()?;        // E0160: OtherError != ConfigError
+//     Ok(n)
+// }
+
+// ── §3 no implicit conversion ─────────────────────────── E0102 (proposed)
+// fn implicit() {
+//     let a: i32 = 1;
+//     let b: i64 = a;                // E0102: write `a as i64`
+// }
+
+// ── §5.1 defer cannot capture a later local ───────────── E0195 (proposed)
+// fn ordering(alloc: Allocator) {
+//     defer v.deinit();              // E0195: `v` declared after the defer
+//     let v = Vec::init(alloc);
+// }
+
+// ── §4.4 missing // SAFETY: ───────────────────────────── E0180 (proposed)
+// fn undocumented() {
+//     unsafe { abs(-1) };            // E0180: no // SAFETY: line (warn)
+// }
+
+// ── §10 MutexGuard cannot be stored ───────────────────── E0150 (proposed)
+// struct Holder { g: MutexGuard<i64> }   // E0150: guard is function-scoped
+
+// ─────────────────────────────────────────────────────────────────────────
+// main
+// ─────────────────────────────────────────────────────────────────────────
+
+fn main() {
+    let gpa = GeneralPurposeAllocator::init();
+    defer gpa.deinit();
+    let alloc = gpa.allocator();
+
+    hello();
+    mutability();
+    integers();
+    patterns();
+    defer_order();
+    resources(alloc);
+    errors();
+    errdefer_demo(alloc);
+    allocators();
+    strings(alloc);
+    generics_traits();
+    threads(alloc);
+    channels(alloc);
+    unsafe_demo();
+    // host_wasm(&module_bytes, alloc) — needs a real .wasm file
+}
+
+// ─────────────────────────────────────────────────────────────────────────
+// Expected output (§14.1). Float formatting is unspecified in v0, so
+// `area = 6` assumes Rust-style Display for 6.0.
+//
+// EXPECT_STDOUT: hello, kowari
+// EXPECT_STDOUT: x=1 y=2
+// EXPECT_STDOUT: 4
+// EXPECT_STDOUT: overflow
+// EXPECT_STDOUT: 255
+// EXPECT_STDOUT: area = 6
+// EXPECT_STDOUT: 7 is small
+// EXPECT_STDOUT: 42 is large
+// EXPECT_STDOUT: if-let 5
+// EXPECT_STDOUT: let-else 5
+// EXPECT_STDOUT: body
+// EXPECT_STDOUT: second registered
+// EXPECT_STDOUT: first registered
+// EXPECT_STDOUT: len = 3
+// EXPECT_STDOUT: port = 42
+// EXPECT_STDOUT: build failed
+// EXPECT_STDOUT: build ok len=2
+// EXPECT_STDOUT: arena: 1 2 3
+// EXPECT_STDOUT: héllo
+// EXPECT_STDOUT: sum = 6
+// EXPECT_STDOUT: point 1 2
+// EXPECT_STDOUT: counter = 2
+// EXPECT_STDOUT: recv 42
+// EXPECT_STDOUT: abs(-5) = 5
+//
+// EXPECT_EXIT: 0
+//
+// ─────────────────────────────────────────────────────────────────────────
+// Syntax I invented (§15.1) — accept, edit, or reject:
+//   `println!(...)`            macro-call form (you chose this over §9.2's
+//                              `format` intrinsic; §9.2 should be updated)
+//   `as`                       the cast operator, for the no-implicit-
+//                              conversion rule to have an escape hatch
+//   `while`, `for i in 0..n`   loops; §15.1 leaves loops entirely open
+//   `&[T]`, `[a, b, c]`        slice type and array literal
+//   `use` paths               module system surface (§9.3)
+//   `Vec::init`, `append`,
+//   `len`, indexing            collection API shape
+//   `String::init`, `push_str`,
+//   `as_str`                   string API shape
+//   `Mutex::init`, `lock`,
+//   `MutexGuard::deinit`       lock poisoning shape (§15.3 open)
+//   `mpsc::channel(alloc, n)`  bounded channel constructor
+//   `thread::scope(|s| ...)`,
+//   `s.spawn(closure)`         structured concurrency shape (§10.1)
+//   `ArenaAllocator::init`,
+//   `arena.allocator()`,
+//   `GeneralPurposeAllocator`  allocator surface (§6.2)
+//   `wasm::Instance::load`,
+//   `inst.call(name, tuple)`   WASM hosting surface (§12.2)
+//   `b'0'`-style byte literals avoided; integer ranges used instead
