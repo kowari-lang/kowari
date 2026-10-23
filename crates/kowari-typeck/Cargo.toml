@@ -1,0 +1,12 @@
+[package]
+name = "kowari-typeck"
+description = "Type checker + affine resource analysis"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+rust-version.workspace = true
+
+[dependencies]
+kowari-ast.workspace = true
+kowari-diagnostics.workspace = true

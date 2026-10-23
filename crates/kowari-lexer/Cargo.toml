@@ -1,0 +1,12 @@
+[package]
+name = "kowari-lexer"
+description = "Lexer: source text → tokens"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+rust-version.workspace = true
+
+[dependencies]
+kowari-diagnostics.workspace = true
+logos.workspace = true

@@ -1,0 +1,10 @@
+[package]
+name = "kowari-ast"
+description = "Shared AST type definitions (data only)"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+rust-version.workspace = true
+
+[dependencies]

@@ -1,0 +1,10 @@
+[package]
+name = "kowari-wasm-host"
+description = "Wasmtime embedding for the stdlib `wasm` module"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+rust-version.workspace = true
+
+[dependencies]

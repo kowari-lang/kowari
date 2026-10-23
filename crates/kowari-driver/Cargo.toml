@@ -1,0 +1,23 @@
+[package]
+name = "kowari-driver"
+description = "The kowaric compiler binary"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+rust-version.workspace = true
+
+[[bin]]
+name = "kowaric"
+path = "src/main.rs"
+
+[dependencies]
+kowari-lexer.workspace = true
+kowari-parser.workspace = true
+kowari-typeck.workspace = true
+kowari-ir.workspace = true
+kowari-codegen-llvm.workspace = true
+kowari-metadata.workspace = true
+kowari-wasm-host.workspace = true
+clap.workspace = true
+anyhow.workspace = true

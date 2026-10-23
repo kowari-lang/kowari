@@ -1,14 +1,47 @@
-[package]
-name = "kowari"
-version = "0.1.0"
-edition = "2024"
+# kowari/Cargo.toml
 
-[dependencies]
+[workspace]
+resolver = "3"
+members = [
+    "crates/kowari-ast",
+    "crates/kowari-diagnostics",
+    "crates/kowari-lexer",
+    "crates/kowari-parser",
+    "crates/kowari-typeck",
+    "crates/kowari-ir",
+    "crates/kowari-codegen-llvm",
+    "crates/kowari-metadata",
+    "crates/kowari-wasm-host",
+    "crates/kowari-driver",
+    "crates/kowari-test-harness",
+]
 
-
+# Shared metadata. Each sub-crate inherits via `workspace = true`.
 [workspace.package]
-version      = "0.0.1"
-edition      = "2021"
-rust-version = "1.78"
-license      = "MIT OR Apache-2.0"
-repository   = "https://github.com/kowari-lang/kowari"
+version = "0.0.0"
+edition = "2024"
+license = "MIT OR Apache-2.0"
+repository = "https://github.com/kowari-lang/kowari"
+rust-version = "1.85"
+
+[workspace.dependencies]
+# Internal crates — path deps so cargo resolves them consistently.
+kowari-ast = { path = "crates/kowari-ast" }
+kowari-diagnostics = { path = "crates/kowari-diagnostics" }
+kowari-lexer = { path = "crates/kowari-lexer" }
+kowari-parser = { path = "crates/kowari-parser" }
+kowari-typeck = { path = "crates/kowari-typeck" }
+kowari-ir = { path = "crates/kowari-ir" }
+kowari-codegen-llvm = { path = "crates/kowari-codegen-llvm" }
+kowari-metadata = { path = "crates/kowari-metadata" }
+kowari-wasm-host = { path = "crates/kowari-wasm-host" }
+kowari-driver = { path = "crates/kowari-driver" }
+kowari-test-harness = { path = "crates/kowari-test-harness" }
+
+# External crates (versions TBD — pin during M0 per §9.1).
+logos = "0.14"
+chumsky = "0.9"
+clap = { version = "4", features = ["derive"] }
+thiserror = "1"
+anyhow = "1"
+codespan-reporting = "0.11"

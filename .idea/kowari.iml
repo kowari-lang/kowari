@@ -2,7 +2,20 @@
 <module type="EMPTY_MODULE" version="4">
   <component name="NewModuleRootManager">
     <content url="file://$MODULE_DIR$">
+      <sourceFolder url="file://$MODULE_DIR$/crates/kowari-ast/src" isTestSource="false" />
+      <sourceFolder url="file://$MODULE_DIR$/crates/kowari-codegen-llvm/src" isTestSource="false" />
+      <sourceFolder url="file://$MODULE_DIR$/crates/kowari-diagnostics/src" isTestSource="false" />
+      <sourceFolder url="file://$MODULE_DIR$/crates/kowari-driver/src" isTestSource="false" />
+      <sourceFolder url="file://$MODULE_DIR$/crates/kowari-ir/src" isTestSource="false" />
+      <sourceFolder url="file://$MODULE_DIR$/crates/kowari-lexer/src" isTestSource="false" />
+      <sourceFolder url="file://$MODULE_DIR$/crates/kowari-metadata/src" isTestSource="false" />
+      <sourceFolder url="file://$MODULE_DIR$/crates/kowari-parser/src" isTestSource="false" />
+      <sourceFolder url="file://$MODULE_DIR$/crates/kowari-test-harness/src" isTestSource="false" />
+      <sourceFolder url="file://$MODULE_DIR$/crates/kowari-typeck/src" isTestSource="false" />
+      <sourceFolder url="file://$MODULE_DIR$/crates/kowari-wasm-host/src" isTestSource="false" />
+      <sourceFolder url="file://$MODULE_DIR$/examples" isTestSource="false" />
       <sourceFolder url="file://$MODULE_DIR$/src" isTestSource="false" />
+      <sourceFolder url="file://$MODULE_DIR$/tests" isTestSource="true" />
       <excludeFolder url="file://$MODULE_DIR$/target" />
     </content>
     <orderEntry type="inheritedJdk" />

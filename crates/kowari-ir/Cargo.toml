@@ -1,0 +1,12 @@
+[package]
+name = "kowari-ir"
+description = "Language IR (HIR + MIR-equivalent) — references first-class"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+rust-version.workspace = true
+
+[dependencies]
+kowari-typeck.workspace = true
+kowari-diagnostics.workspace = true
