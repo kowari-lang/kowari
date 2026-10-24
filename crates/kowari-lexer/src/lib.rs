@@ -10,22 +10,70 @@ pub struct Token<'src> {
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum TokenKind<'src> {
     // Operators
-    Plus,
-    Minus,
-    Star,
-    Slash,
-    Percent,
-    LParen,
-    RParen,
-    LBrace,
-    RBrace,
+    Plus, // +
+    Minus, // -
+    Star, // *
+    Slash, // /
+    Percent, // %
+    LParen, // (
+    RParen, // )
+    LBrace, // {
+    RBrace, // }
+    LSquareBracket, // [
+    RSquareBracket, // ]
+    Pipe, // |
+    Ampersand, // &
+    Caret, // ^
+    HashTag, // #
+    AtSign, // @
+    BiggerThen, // >
+    SmallerThen, // <
+    Exclamation, // !
 
-    // Words
+    // Multi-Operators
+    LShift, // <<
+    RShift, // >>
+
+
+    // Equality
+    Equals,
+    DoubleEquals,
+    NotEquals,
+    BiggerOrEquals, // >=
+    SmallerOrEquals, // <=
+    DoubleAnd, // &&
+    DoublePipe, // ||
+
+
+    // Keywords
     Function,
     Identifier(&'src str),
+    LetToken,
+    MutToken,
+    IfToken,
+    ElseToken,
+    MatchToken,
+    ForToken,
+    WhileToken,
+    LoopToken,
+    ReturnToken,
+    Defer,
+    ErrDefer,
+    StructToken,
+    EnumToken,
+    TraitToken,
+    ImplToken,
+    PubToken,
+    UnsafeToken,
+    ExternToken,
 
     // Literals
     Integer(&'src str),
+    Float(&'src str),
+    String(&'src str),
+    Str(&'src str),
+    TrueToken,
+    FalseToken,
 
     // End Of File
     Eof,
@@ -72,6 +120,26 @@ pub fn lex(src: &'_ str) -> Result<Vec<Token<'_>>, Vec<Diag>> {
                 let text = &src[start..end];
                 let kind = match text {
                     "fn" => TokenKind::Function,
+                    "let" => TokenKind::LetToken,
+                    "mut" => TokenKind::MutToken,
+                    "if" => TokenKind::IfToken,
+                    "else" => TokenKind::ElseToken,
+                    "match" => TokenKind::MatchToken,
+                    "for" => TokenKind::ForToken,
+                    "while" => TokenKind::WhileToken,
+                    "return" => TokenKind::ReturnToken,
+                    "defer" => TokenKind::Defer,
+                    "errdefer" => TokenKind::ErrDefer,
+                    "struct" => TokenKind::StructToken,
+                    "enum" => TokenKind::EnumToken,
+                    "trait" => TokenKind::TraitToken,
+                    "impl" => TokenKind::ImplToken,
+                    "pub" => TokenKind::PubToken,
+                    "unsafe" => TokenKind::UnsafeToken,
+                    "extern" => TokenKind::ExternToken,
+                    "true" => TokenKind::TrueToken,
+                    "false" => TokenKind::FalseToken,
+                    "loop" => TokenKind::LoopToken,
                     _ => TokenKind::Identifier(text),
                 };
                 Some((kind, end))
