@@ -181,6 +181,13 @@ pub fn lex(src: &'_ str) -> Result<Vec<Token<'_>>, Vec<Diag>> {
                 TokenKind::Exclamation,
                 TokenKind::NotEquals,
             )),
+            '?' => Some(lex_optional_suffix(
+                &mut iter,
+                src.len(),
+                '?',
+                TokenKind::QuestionMark,
+                TokenKind::DoubleQuestionMark,
+            )),
             '(' => Some((TokenKind::LParen, start + c.len_utf8())),
             ')' => Some((TokenKind::RParen, start + c.len_utf8())),
             '{' => Some((TokenKind::LBrace, start + c.len_utf8())),
@@ -188,6 +195,13 @@ pub fn lex(src: &'_ str) -> Result<Vec<Token<'_>>, Vec<Diag>> {
             '[' => Some((TokenKind::LSquareBracket, start + c.len_utf8())),
             ']' => Some((TokenKind::RSquareBracket, start + c.len_utf8())),
             ';' => Some((TokenKind::Semicolon, start + c.len_utf8())),
+            ':' => Some(lex_optional_suffix(
+                &mut iter,
+                src.len(),
+                ':',
+                TokenKind::Colon,
+                TokenKind::DoubleColon,
+            )),
             '=' => Some(lex_optional_suffix(
                 &mut iter,
                 src.len(),
