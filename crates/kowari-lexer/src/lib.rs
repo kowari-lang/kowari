@@ -10,40 +10,43 @@ pub struct Token<'src> {
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum TokenKind<'src> {
     // Operators
-    Plus, // +
-    Minus, // -
-    Star, // *
-    Slash, // /
-    Percent, // %
-    LParen, // (
-    RParen, // )
-    LBrace, // {
-    RBrace, // }
+    Plus,           // +
+    Minus,          // -
+    Star,           // *
+    Slash,          // /
+    Percent,        // %
+    LParen,         // (
+    RParen,         // )
+    LBrace,         // {
+    RBrace,         // }
     LSquareBracket, // [
     RSquareBracket, // ]
-    Pipe, // |
-    Ampersand, // &
-    Caret, // ^
-    HashTag, // #
-    AtSign, // @
-    BiggerThen, // >
-    SmallerThen, // <
-    Exclamation, // !
+    Pipe,           // |
+    Ampersand,      // &
+    Caret,          // ^
+    HashTag,        // #
+    AtSign,         // @
+    BiggerThen,     // >
+    SmallerThen,    // <
+    Exclamation,    // !
 
     // Multi-Operators
-    LShift, // <<
-    RShift, // >>
-
-
-    // Equality
-    Equals,
-    DoubleEquals,
-    NotEquals,
-    BiggerOrEquals, // >=
+    LShift,          // <<
+    RShift,          // >>
+    LShiftEquals,    // <<=
+    RShiftEquals,    // >>=
+    Equals,          // =
+    DoubleEquals,    // ==
+    NotEquals,       // !=
+    BiggerOrEquals,  // >=
     SmallerOrEquals, // <=
-    DoubleAnd, // &&
-    DoublePipe, // ||
-
+    DoubleAnd,       // &&
+    DoublePipe,      // ||
+    PlusEquals,      // +=
+    MinusEquals,     // -=
+    StarEquals,      // *=
+    SlashEquals,     // /=
+    PercentEquals,   // %=
 
     // Keywords
     Function,
@@ -90,15 +93,127 @@ pub fn lex(src: &'_ str) -> Result<Vec<Token<'_>>, Vec<Diag>> {
         }
 
         let opt: Option<(TokenKind, usize)> = match c {
-            '+' => Some((TokenKind::Plus, start + c.len_utf8())),
-            '-' => Some((TokenKind::Minus, start + c.len_utf8())),
-            '*' => Some((TokenKind::Star, start + c.len_utf8())),
-            '/' => Some((TokenKind::Slash, start + c.len_utf8())),
-            '%' => Some((TokenKind::Percent, start + c.len_utf8())),
+            '+' => {
+                let consumed = if try_consume(&mut iter, '=') { 2 } else { 1 };
+                let end = iter.peek().map(|(i, _)| *i).unwrap_or(src.len());
+                let kind = if consumed == 2 {
+                    TokenKind::PlusEquals
+                } else {
+                    TokenKind::Plus
+                };
+                Some((kind, end))
+            }
+            '-' => {
+                let consumed = if try_consume(&mut iter, '=') { 2 } else { 1 };
+                let end = iter.peek().map(|(i, _)| *i).unwrap_or(src.len());
+                let kind = if consumed == 2 {
+                    TokenKind::MinusEquals
+                } else {
+                    TokenKind::Minus
+                };
+                Some((kind, end))
+            }
+            '*' => {
+                let consumed = if try_consume(&mut iter, '=') { 2 } else { 1 };
+                let end = iter.peek().map(|(i, _)| *i).unwrap_or(src.len());
+                let kind = if consumed == 2 {
+                    TokenKind::StarEquals
+                } else {
+                    TokenKind::Star
+                };
+                Some((kind, end))
+            }
+            '/' => {
+                let consumed = if try_consume(&mut iter, '=') { 2 } else { 1 };
+                let end = iter.peek().map(|(i, _)| *i).unwrap_or(src.len());
+                let kind = if consumed == 2 {
+                    TokenKind::SlashEquals
+                } else {
+                    TokenKind::Slash
+                };
+                Some((kind, end))
+            }
+            '%' => {
+                let consumed = if try_consume(&mut iter, '=') { 2 } else { 1 };
+                let end = iter.peek().map(|(i, _)| *i).unwrap_or(src.len());
+                let kind = if consumed == 2 {
+                    TokenKind::PercentEquals
+                } else {
+                    TokenKind::Percent
+                };
+                Some((kind, end))
+            }
+            '!' => {
+                let consumed = if try_consume(&mut iter, '=') { 2 } else { 1 };
+                let end = iter.peek().map(|(i, _)| *i).unwrap_or(src.len());
+                let kind = if consumed == 2 {
+                    TokenKind::NotEquals
+                } else {
+                    TokenKind::Exclamation
+                };
+                Some((kind, end))
+            },
             '(' => Some((TokenKind::LParen, start + c.len_utf8())),
             ')' => Some((TokenKind::RParen, start + c.len_utf8())),
             '{' => Some((TokenKind::LBrace, start + c.len_utf8())),
             '}' => Some((TokenKind::RBrace, start + c.len_utf8())),
+            '=' => {
+                let consumed = if try_consume(&mut iter, '=') { 2 } else { 1 };
+                let end = iter.peek().map(|(i, _)| *i).unwrap_or(src.len());
+                let kind = if consumed == 2 {
+                    TokenKind::DoubleEquals
+                } else {
+                    TokenKind::Equals
+                };
+                Some((kind, end))
+            },
+            '<' => {
+                if try_consume(&mut iter, '<') {
+                    // We've got `<<`; is it `<<=`?
+                    if try_consume(&mut iter, '=') {
+                        Some((TokenKind::LShiftEquals, start + 3))
+                    } else {
+                        Some((TokenKind::LShift, start + 2))
+                    }
+                } else if try_consume(&mut iter, '=') {
+                    Some((TokenKind::SmallerOrEquals, start + 2))
+                } else {
+                    Some((TokenKind::SmallerThen, start + 1))
+                }
+            },
+            '>' => {
+                if try_consume(&mut iter, '>') {
+                    if try_consume(&mut iter, '=') {
+                        Some((TokenKind::RShiftEquals, start + 3))
+                    } else {
+                        Some((TokenKind::RShift, start + 2))
+                    }
+                } else if try_consume(&mut iter, '=') {
+                    Some((TokenKind::BiggerOrEquals, start + 2))
+                } else {
+                    Some((TokenKind::BiggerThen, start + 1))
+                }
+            },
+            '&' => {
+                let consumed = if try_consume(&mut iter, '&') { 2 } else { 1 };
+                let end = iter.peek().map(|(i, _)| *i).unwrap_or(src.len());
+                let kind = if consumed == 2 {
+                    TokenKind::DoubleAnd
+                } else {
+                    TokenKind::Ampersand
+                };
+                Some((kind, end))
+            },
+            '|' => {
+                let consumed = if try_consume(&mut iter, '|') { 2 } else { 1 };
+                let end = iter.peek().map(|(i, _)| *i).unwrap_or(src.len());
+                let kind = if consumed == 2 {
+                    TokenKind::DoublePipe
+                } else {
+                    TokenKind::Pipe
+                };
+                Some((kind, end))
+            }
             c if c.is_ascii_digit() => {
                 // Inner loop: consume trailing digits.
                 while iter.peek().is_some_and(|(_, c)| c.is_ascii_digit()) {
@@ -175,12 +290,25 @@ pub fn lex(src: &'_ str) -> Result<Vec<Token<'_>>, Vec<Diag>> {
     });
 
     if !errors.is_empty() {
-        return Err(errors)
+        return Err(errors);
     }
 
     Ok(tokens)
 }
 
+fn peek_char(iter: &mut std::iter::Peekable<std::str::CharIndices>) -> Option<char> {
+    iter.peek().map(|(_, c)| *c)
+}
+
+/// Consume the next char if it equals `expected`. Returns true if consumed.
+fn try_consume(iter: &mut std::iter::Peekable<std::str::CharIndices>, expected: char) -> bool {
+    if peek_char(iter) == Some(expected) {
+        iter.next();
+        true
+    } else {
+        false
+    }
+}
 #[test]
 fn lexes_fn_main() {
     let tokens = lex("fn main() { 1 + 2 }").unwrap();
@@ -234,4 +362,60 @@ fn lex_unknown_token_errors() {
         3,
         "expected exactly 3 diagnostic, got {diags:?}"
     );
+}
+#[test]
+fn lexes_operators_without_whitespace() {
+    let kinds: Vec<_> = lex("1+2").unwrap().iter().map(|t| t.kind).collect();
+    assert_eq!(
+        kinds,
+        vec![
+            TokenKind::Integer("1"),
+            TokenKind::Plus,
+            TokenKind::Integer("2"),
+            TokenKind::Eof,
+        ]
+    );
+}
+
+#[test]
+fn lexes_multi_char_operators() {
+    let tokens = lex("== != <= >= && || << >>")
+        .expect("lexer should accept all valid two-char operators");
+
+    let kinds: Vec<TokenKind> = tokens.iter().map(|t| t.kind).collect();
+    assert_eq!(
+        kinds,
+        vec![
+            TokenKind::DoubleEquals,
+            TokenKind::NotEquals,
+            TokenKind::SmallerOrEquals,
+            TokenKind::BiggerOrEquals,
+            TokenKind::DoubleAnd,
+            TokenKind::DoublePipe,
+            TokenKind::LShift,
+            TokenKind::RShift,
+            TokenKind::Eof,
+        ]
+    );
+}
+
+#[test]
+fn lexes_shift_assign_disambiguation() {
+    // `<<=` must not lex as `<<`, `=`
+    let kinds: Vec<_> = lex("<<= >>= <<").unwrap().iter().map(|t| t.kind).collect();
+    assert_eq!(
+        kinds,
+        vec![
+            TokenKind::LShiftEquals,
+            TokenKind::RShiftEquals,
+            TokenKind::LShift,
+            TokenKind::Eof,
+        ]
+    );
+}
+
+#[test]
+fn span_of_two_char_operator() {
+    let tokens = lex("==").unwrap();
+    assert_eq!(tokens[0].span, Span { start: 0, end: 2 });
 }
