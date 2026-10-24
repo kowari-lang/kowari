@@ -73,3 +73,47 @@ impl From<ErrorCode> for DiagCode {
         DiagCode(c.code())
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::ErrorCode;
+    use std::collections::HashSet;
+
+    #[test]
+    fn every_code_is_unique() {
+        let mut seen = HashSet::new();
+        for c in ErrorCode::ALL {
+            assert!(seen.insert(c.code()), "duplicate code {}", c.code());
+        }
+    }
+
+    #[test]
+    fn every_code_has_a_description() {
+        for c in ErrorCode::ALL {
+            assert!(
+                !c.description().is_empty(),
+                "{} has no description",
+                c.code()
+            );
+        }
+    }
+
+    #[test]
+    /// Checks if an error code is correctly formed, starting with E, then 4x a number
+    fn code_format_malformed_error_codes() {
+        for c in ErrorCode::ALL {
+            let s = c.code();
+            assert!(
+                s.len() == 5 && s.starts_with('E') && s[1..].chars().all(|x| x.is_ascii_digit()),
+                "malformed code {s}"
+            );
+        }
+    }
+
+    #[test]
+    fn round_trip() {
+        for c in ErrorCode::ALL {
+            assert_eq!(ErrorCode::from_code(c.code()), Some(*c));
+        }
+    }
+}
