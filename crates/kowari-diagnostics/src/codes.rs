@@ -13,6 +13,7 @@ pub enum ErrorCode {
     MultiChar,           // E0005
     BadNumericSeparator, // E0006
     RadixWithoutDigits,  // E0007
+    UnterminatedBlockComment, // E0008
                          // --- add parser / typeck / borrow-check codes as they land ---
 }
 
@@ -28,6 +29,7 @@ impl ErrorCode {
             Self::MultiChar => "E0005",
             Self::BadNumericSeparator => "E0006",
             Self::RadixWithoutDigits => "E0007",
+            Self::UnterminatedBlockComment => "E0008",
         }
     }
 
@@ -48,6 +50,9 @@ impl ErrorCode {
             }
             Self::RadixWithoutDigits => {
                 "A radix prefix (`0x`, `0b`, `0o`) was not followed by any digits."
+            }
+            Self::UnterminatedBlockComment => {
+                "A block comment was opened with `/*` but never closed with `*/`."
             }
         }
     }
