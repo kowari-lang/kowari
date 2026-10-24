@@ -254,15 +254,161 @@ pub fn lex(src: &'_ str) -> Result<Vec<Token<'_>>, Vec<Diag>> {
                 } else {
                     Some((TokenKind::Dot, start + 1))
                 }
-            },
-            c if c.is_ascii_digit() => {
-                // Inner loop: consume trailing digits.
-                while iter.peek().is_some_and(|(_, c)| c.is_ascii_digit()) {
-                    iter.next();
+            }
+            '"' => {
+                // Consume until unescaped closing " or EOF.
+                let mut terminated = false;
+                loop {
+                    match iter.next() {
+                        Some((_, '\\')) => {
+                            // Skip the escaped char. Unterminated if EOF right after '\'.
+                            if iter.next().is_none() {
+                                break;
+                            }
+                        }
+                        Some((_, '"')) => {
+                            terminated = true;
+                            break;
+                        }
+                        Some(_) => {} // any other char is fine
+                        None => break,
+                    }
                 }
 
                 let end = iter.peek().map(|(i, _)| *i).unwrap_or(src.len());
-                Some((TokenKind::Integer(&src[start..end]), end))
+
+                if !terminated {
+                    errors.push(Diag {
+                        code: DiagCode("E0002"),
+                        span: Span {
+                            start: start as u32,
+                            end: end as u32,
+                        },
+                        message: "Unterminated string literal".to_string(),
+                    });
+                    None
+                } else {
+                    // `end` is one byte past the closing `"`; content is between the
+                    // delimiters, so exclude one byte on each side.
+                    let content_end = end - 1;
+                    debug_assert!(content_end > start);
+                    let content = &src[start + 1..content_end];
+                    Some((TokenKind::String(content), end))
+                }
+            }
+            '\'' => {
+                let content_start = start + 1;
+
+                // Read the single content unit.
+                let Some((_, first)) = iter.next() else {
+                    // `'` at EOF
+                    errors.push(Diag {
+                        code: DiagCode("E0003"),
+                        span: Span {
+                            start: start as u32,
+                            end: (start + 1) as u32,
+                        },
+                        message: "Unterminated char literal".to_string(),
+                    });
+                    continue;
+                };
+
+                // Empty char: `''`
+                if first == '\'' {
+                    errors.push(Diag {
+                        code: DiagCode("E0004"),
+                        span: Span {
+                            start: start as u32,
+                            end: (start + 2) as u32,
+                        },
+                        message: "Empty char literal".to_string(),
+                    });
+                    continue;
+                }
+
+                // Escape: must be followed by exactly one char.
+                if first == '\\' && iter.next().is_none() {
+                    errors.push(Diag {
+                        code: DiagCode("E0003"),
+                        span: Span {
+                            start: start as u32,
+                            end: src.len() as u32,
+                        },
+                        message: "Unterminated char literal".to_string(),
+                    });
+                    continue; // diverges — fixes the discarded Option
+                }
+
+                // Enforce the closing quote.
+                if !try_consume(&mut iter, '\'') {
+                    // Malformed: too long (`'ab'`) or unterminated (`'a`).
+                    // Recover by consuming up to and including the next `'`,
+                    // stopping at newline if we hit one first.
+                    let mut recovered_end = iter.peek().map(|(i, _)| *i).unwrap_or(src.len());
+                    while let Some((i, ch)) = iter.peek().copied() {
+                        if ch == '\n' || ch == '\r' {
+                            recovered_end = i;
+                            break;
+                        }
+                        if ch == '\'' {
+                            iter.next();
+                            recovered_end = i + 1;
+                            break;
+                        }
+                        iter.next();
+                        recovered_end = i + ch.len_utf8();
+                    }
+                    errors.push(Diag {
+                        code: DiagCode("E0005"),
+                        span: Span {
+                            start: start as u32,
+                            end: recovered_end as u32,
+                        },
+                        message: "Char literal must contain exactly one character".to_string(),
+                    });
+                    continue;
+                }
+
+                // Success path only: `end` sits just past the closing `'`.
+                let end = iter.peek().map(|(i, _)| *i).unwrap_or(src.len());
+                let content = &src[content_start..end - 1];
+                Some((TokenKind::Char(content), end))
+            }
+            c if c.is_ascii_digit() => {
+                while iter
+                    .peek()
+                    .is_some_and(|(_, c)| c.is_ascii_digit() || *c == '_')
+                {
+                    iter.next();
+                }
+                let end = iter.peek().map(|(i, _)| *i).unwrap_or(src.len());
+                let text = &src[start..end];
+
+                // Reject a trailing '_' and any "__" sequence.
+                if text.ends_with('_') {
+                    errors.push(Diag {
+                        code: DiagCode("E0006"),
+                        span: Span {
+                            start: (end - 1) as u32,
+                            end: end as u32,
+                        },
+                        message: "Integer literal cannot end with '_'".to_string(),
+                    });
+                } else if text.contains("__") {
+                    // Report the first offending pair.
+                    let rel = text.find("__").unwrap();
+                    let abs = start + rel;
+                    errors.push(Diag {
+                        code: DiagCode("E0006"),
+                        span: Span {
+                            start: abs as u32,
+                            end: (abs + 2) as u32,
+                        },
+                        message: "Integer literal cannot contain consecutive '_'".to_string(),
+                    });
+                }
+
+                Some((TokenKind::Integer(text), end))
             }
             c if c.is_alphabetic() || c == '_' => {
                 while iter
@@ -774,4 +920,123 @@ fn dot_and_range() {
             TokenKind::Eof,
         ]
     );
+}
+
+#[test]
+fn integer_separators_are_preserved() {
+    let kinds: Vec<_> = lex("1_000_000").unwrap().iter().map(|t| t.kind).collect();
+    assert_eq!(kinds, vec![TokenKind::Integer("1_000_000"), TokenKind::Eof]);
+}
+
+#[test]
+fn underscore_leading_identifiers_are_not_integers() {
+    // A leading '_' must produce an Identifier, not an Integer.
+    let kinds: Vec<_> = lex("_foo _ _1").unwrap().iter().map(|t| t.kind).collect();
+    assert_eq!(
+        kinds,
+        vec![
+            TokenKind::Identifier("_foo"),
+            TokenKind::Identifier("_"),
+            TokenKind::Identifier("_1"),
+            TokenKind::Eof,
+        ]
+    );
+}
+
+#[test]
+fn trailing_underscore_is_rejected() {
+    // "1_" — a trailing separator is not valid in any reasonable grammar.
+    let result = lex("1_");
+    assert!(result.is_err(), "trailing '_' should be a diagnostic");
+    let diags = result.unwrap_err();
+    assert_eq!(diags[0].code, DiagCode("E0006"));
+    assert_eq!(diags[0].span, Span { start: 1, end: 2 });
+}
+
+#[test]
+fn double_underscore_is_rejected() {
+    let result = lex("1__2");
+    assert!(result.is_err(), "double '_' should be a diagnostic");
+    let diags = result.unwrap_err();
+    assert_eq!(diags[0].code, DiagCode("E0006"));
+}
+
+#[test]
+fn lexes_simple_char() {
+    let tokens = lex("'a'").unwrap();
+    assert_eq!(tokens[0].kind, TokenKind::Char("a"));
+    assert_eq!(tokens[0].span, Span { start: 0, end: 3 });
+    assert_eq!(tokens[1].kind, TokenKind::Eof);
+}
+
+#[test]
+fn lexes_escaped_char() {
+    let tokens = lex(r"'\n'").unwrap();
+    assert_eq!(tokens[0].kind, TokenKind::Char(r"\n"));
+    assert_eq!(tokens[0].span, Span { start: 0, end: 4 });
+}
+
+#[test]
+fn lexes_escaped_quote_char() {
+    // '\'' — escape is \' , closing quote is the final '
+    let tokens = lex(r"'\''").unwrap();
+    assert_eq!(tokens[0].kind, TokenKind::Char(r"\'"));
+    assert_eq!(tokens[0].span, Span { start: 0, end: 4 });
+}
+
+#[test]
+fn empty_char_is_an_error() {
+    let diags = lex("''").unwrap_err();
+    assert_eq!(diags.len(), 1, "got: {diags:?}");
+    assert_eq!(diags[0].code, DiagCode("E0004"));
+    assert_eq!(diags[0].span, Span { start: 0, end: 2 });
+}
+
+#[test]
+fn multi_char_is_an_error_and_recovers() {
+    // 'ab' — should consume through the closing quote and produce one diag.
+    let diags = lex("'ab' + 1").unwrap_err();
+    assert_eq!(diags.len(), 1, "got: {diags:?}");
+    assert_eq!(diags[0].code, DiagCode("E0005"));
+    assert_eq!(diags[0].span, Span { start: 0, end: 4 });
+}
+
+#[test]
+fn unterminated_char_is_an_error() {
+    let diags = lex("'a").unwrap_err();
+    assert_eq!(diags.len(), 1, "got: {diags:?}");
+    assert_eq!(diags[0].code, DiagCode("E0005"));
+}
+
+#[test]
+fn bare_quote_at_eof_is_an_error() {
+    let diags = lex("'").unwrap_err();
+    assert_eq!(diags.len(), 1, "got: {diags:?}");
+    assert_eq!(diags[0].code, DiagCode("E0003"));
+}
+
+#[test]
+fn unterminated_escape_is_an_error() {
+    let diags = lex(r"'\").unwrap_err();
+    assert_eq!(diags.len(), 1, "got: {diags:?}");
+    assert_eq!(diags[0].code, DiagCode("E0003"));
+}
+
+#[test]
+fn string_content_is_correct_with_multibyte_chars() {
+    // é is 2 bytes; the slice must not land mid-codepoint.
+    let tokens = lex("\"héllo\"").unwrap();
+    assert_eq!(tokens[0].kind, TokenKind::String("héllo"));
+    assert_eq!(tokens[0].span, Span { start: 0, end: 8 });
+
+    let tokens = lex("\"é\"").unwrap();
+    assert_eq!(tokens[0].kind, TokenKind::String("é"));
+    assert_eq!(tokens[0].span, Span { start: 0, end: 4 });
+}
+
+#[test]
+fn string_span_includes_both_quotes() {
+    let tokens = lex("\"abc\"").unwrap();
+    assert_eq!(tokens[0].span, Span { start: 0, end: 5 });
+    assert_eq!(tokens[0].kind, TokenKind::String("abc"));
 }
