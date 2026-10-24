@@ -1,4 +1,5 @@
 //! Lexer: source text → tokens.
+
 use kowari_diagnostics::{Diag, DiagCode, Span};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -29,24 +30,59 @@ pub enum TokenKind<'src> {
     BiggerThen,     // >
     SmallerThen,    // <
     Exclamation,    // !
+    Colon,          // :
+    Semicolon,      // ;
+    Dot,            // .
+    QuestionMark,   // ?
+    Tilde,          // ~
 
     // Multi-Operators
-    LShift,          // <<
-    RShift,          // >>
-    LShiftEquals,    // <<=
-    RShiftEquals,    // >>=
-    Equals,          // =
-    DoubleEquals,    // ==
-    NotEquals,       // !=
-    BiggerOrEquals,  // >=
-    SmallerOrEquals, // <=
-    DoubleAnd,       // &&
-    DoublePipe,      // ||
-    PlusEquals,      // +=
-    MinusEquals,     // -=
-    StarEquals,      // *=
-    SlashEquals,     // /=
-    PercentEquals,   // %=
+    LShift,             // <<
+    RShift,             // >>
+    LShiftEquals,       // <<=
+    RShiftEquals,       // >>=
+    Equals,             // =
+    DoubleEquals,       // ==
+    NotEquals,          // !=
+    BiggerOrEquals,     // >=
+    SmallerOrEquals,    // <=
+    DoubleAnd,          // &&
+    DoublePipe,         // ||
+    PlusEquals,         // +=
+    MinusEquals,        // -=
+    StarEquals,         // *=
+    SlashEquals,        // /=
+    PercentEquals,      // %=
+    DoubleColon,        // ::
+    DoubleDot,          // ..
+    RangeInclusive,     // ..=
+    SmallArrow,         // ->
+    BigArrow,           // =>
+    DoubleQuestionMark, // ??
+    DoubleSlash,        // //
+
+    // Overflow-policy operators (see Spec §11.2)
+
+    // Wrapping (explicit wrap-around, modulo 2^N)
+    PlusWrapping,   // +%
+    MinusWrapping,  // -%
+    StarWrapping,   // *%
+    SlashWrapping,  // /%
+    LShiftWrapping, // <<%
+    RShiftWrapping, // >>%
+
+    // Checked (returns Option<T>, None on overflow)
+    PlusChecked,   // +?
+    MinusChecked,  // -?
+    StarChecked,   // *?
+    SlashChecked,  // /?
+    LShiftChecked, // <<?
+    RShiftChecked, // >>?
+
+    // Saturating (clamps to min/max of the type)
+    PlusSaturating,  // +|
+    MinusSaturating, // -|
+    StarSaturating,  // *|
 
     // Keywords
     Function,
@@ -74,7 +110,7 @@ pub enum TokenKind<'src> {
     Integer(&'src str),
     Float(&'src str),
     String(&'src str),
-    Str(&'src str),
+    Char(&'src str),
     TrueToken,
     FalseToken,
 
@@ -93,46 +129,119 @@ pub fn lex(src: &'_ str) -> Result<Vec<Token<'_>>, Vec<Diag>> {
         }
 
         let opt: Option<(TokenKind, usize)> = match c {
-            '+' => Some(lex_optional_suffix(&mut iter, src.len(), '=', TokenKind::Plus, TokenKind::PlusEquals)),
-            '-' => Some(lex_optional_suffix(&mut iter, src.len(), '=', TokenKind::Minus, TokenKind::MinusEquals)),
-            '*' => Some(lex_optional_suffix(&mut iter, src.len(), '=', TokenKind::Star, TokenKind::StarEquals)),
-            '/' => Some(lex_optional_suffix(&mut iter, src.len(), '=', TokenKind::Slash, TokenKind::SlashEquals)),
-            '%' => Some(lex_optional_suffix(&mut iter, src.len(), '=', TokenKind::Percent, TokenKind::PercentEquals)),
-            '!' => Some(lex_optional_suffix(&mut iter, src.len(), '=', TokenKind::Exclamation, TokenKind::NotEquals)),
+            '+' => Some(lex_arith(
+                &mut iter,
+                src.len(),
+                TokenKind::Plus,
+                TokenKind::PlusEquals,
+                TokenKind::PlusWrapping,
+                TokenKind::PlusChecked,
+                Some(TokenKind::PlusSaturating),
+            )),
+            '-' => Some(lex_arith(
+                &mut iter,
+                src.len(),
+                TokenKind::Minus,
+                TokenKind::MinusEquals,
+                TokenKind::MinusWrapping,
+                TokenKind::MinusChecked,
+                Some(TokenKind::MinusSaturating),
+            )),
+            '*' => Some(lex_arith(
+                &mut iter,
+                src.len(),
+                TokenKind::Star,
+                TokenKind::StarEquals,
+                TokenKind::StarWrapping,
+                TokenKind::StarChecked,
+                Some(TokenKind::StarSaturating),
+            )),
+            '/' => Some(lex_arith(
+                &mut iter,
+                src.len(),
+                TokenKind::Slash,
+                TokenKind::SlashEquals,
+                TokenKind::SlashWrapping,
+                TokenKind::SlashChecked,
+                None,
+            )),
+            '%' => Some(lex_optional_suffix(
+                &mut iter,
+                src.len(),
+                '=',
+                TokenKind::Percent,
+                TokenKind::PercentEquals,
+            )),
+            '!' => Some(lex_optional_suffix(
+                &mut iter,
+                src.len(),
+                '=',
+                TokenKind::Exclamation,
+                TokenKind::NotEquals,
+            )),
             '(' => Some((TokenKind::LParen, start + c.len_utf8())),
             ')' => Some((TokenKind::RParen, start + c.len_utf8())),
             '{' => Some((TokenKind::LBrace, start + c.len_utf8())),
             '}' => Some((TokenKind::RBrace, start + c.len_utf8())),
-            '=' => Some(lex_optional_suffix(&mut iter, src.len(), '=', TokenKind::Equals, TokenKind::DoubleEquals)),
+            '[' => Some((TokenKind::LSquareBracket, start + c.len_utf8())),
+            ']' => Some((TokenKind::RSquareBracket, start + c.len_utf8())),
+            ';' => Some((TokenKind::Semicolon, start + c.len_utf8())),
+            '=' => Some(lex_optional_suffix(
+                &mut iter,
+                src.len(),
+                '=',
+                TokenKind::Equals,
+                TokenKind::DoubleEquals,
+            )),
             '<' => {
                 if try_consume(&mut iter, '<') {
-                    // We've got `<<`; is it `<<=`?
-                    if try_consume(&mut iter, '=') {
-                        Some((TokenKind::LShiftEquals, start + 3))
-                    } else {
-                        Some((TokenKind::LShift, start + 2))
-                    }
+                    Some(lex_arith(
+                        &mut iter,
+                        src.len(),
+                        TokenKind::LShift,
+                        TokenKind::LShiftEquals,
+                        TokenKind::LShiftWrapping,
+                        TokenKind::LShiftChecked,
+                        None,
+                    ))
                 } else if try_consume(&mut iter, '=') {
                     Some((TokenKind::SmallerOrEquals, start + 2))
                 } else {
                     Some((TokenKind::SmallerThen, start + 1))
                 }
-            },
+            }
             '>' => {
                 if try_consume(&mut iter, '>') {
-                    if try_consume(&mut iter, '=') {
-                        Some((TokenKind::RShiftEquals, start + 3))
-                    } else {
-                        Some((TokenKind::RShift, start + 2))
-                    }
+                    Some(lex_arith(
+                        &mut iter,
+                        src.len(),
+                        TokenKind::RShift,
+                        TokenKind::RShiftEquals,
+                        TokenKind::RShiftWrapping,
+                        TokenKind::RShiftChecked,
+                        None,
+                    ))
                 } else if try_consume(&mut iter, '=') {
                     Some((TokenKind::BiggerOrEquals, start + 2))
                 } else {
                     Some((TokenKind::BiggerThen, start + 1))
                 }
-            },
-            '&' => Some(lex_optional_suffix(&mut iter, src.len(), '&', TokenKind::Ampersand, TokenKind::DoubleAnd)),
-            '|' => Some(lex_optional_suffix(&mut iter, src.len(), '|', TokenKind::Pipe, TokenKind::DoublePipe)),
+            }
+            '&' => Some(lex_optional_suffix(
+                &mut iter,
+                src.len(),
+                '&',
+                TokenKind::Ampersand,
+                TokenKind::DoubleAnd,
+            )),
+            '|' => Some(lex_optional_suffix(
+                &mut iter,
+                src.len(),
+                '|',
+                TokenKind::Pipe,
+                TokenKind::DoublePipe,
+            )),
+            '~' => Some((TokenKind::Tilde, start + c.len_utf8())),
             c if c.is_ascii_digit() => {
                 // Inner loop: consume trailing digits.
                 while iter.peek().is_some_and(|(_, c)| c.is_ascii_digit()) {
@@ -239,11 +348,48 @@ fn lex_optional_suffix<'src>(
     single: TokenKind<'src>,
     combined: TokenKind<'src>,
 ) -> (TokenKind<'src>, usize) {
-    let kind = if try_consume(iter, suffix) { combined } else { single };
+    let kind = if try_consume(iter, suffix) {
+        combined
+    } else {
+        single
+    };
     // Peek *after* consuming: `end` must sit past the suffix when present.
     let end = iter.peek().map(|(i, _)| *i).unwrap_or(src_len);
     (kind, end)
 }
+
+fn lex_arith<'src>(
+    iter: &mut std::iter::Peekable<std::str::CharIndices<'src>>,
+    src_len: usize,
+    single: TokenKind<'src>,
+    eq: TokenKind<'src>,
+    wrapping: TokenKind<'src>,
+    checked: TokenKind<'src>,
+    saturating: Option<TokenKind<'src>>,
+) -> (TokenKind<'src>, usize) {
+    let kind = match peek_char(iter) {
+        Some('=') => {
+            iter.next();
+            eq
+        }
+        Some('%') => {
+            iter.next();
+            wrapping
+        }
+        Some('?') => {
+            iter.next();
+            checked
+        }
+        Some('|') if saturating.is_some() => {
+            iter.next();
+            saturating.unwrap()
+        }
+        _ => single,
+    };
+    let end = iter.peek().map(|(i, _)| *i).unwrap_or(src_len);
+    (kind, end)
+}
+
 #[test]
 fn lexes_fn_main() {
     let tokens = lex("fn main() { 1 + 2 }").unwrap();
@@ -290,7 +436,7 @@ fn lex_unknown_token_errors() {
         }]
     );
 
-    result = lex("fn main() { @~♥ }");
+    result = lex("fn main() { ♥☻○ }");
     diags = result.unwrap_err();
     assert_eq!(
         diags.len(),
@@ -314,8 +460,8 @@ fn lexes_operators_without_whitespace() {
 
 #[test]
 fn lexes_multi_char_operators() {
-    let tokens = lex("== != <= >= && || << >>")
-        .expect("lexer should accept all valid two-char operators");
+    let tokens =
+        lex("== != <= >= && || << >>").expect("lexer should accept all valid two-char operators");
 
     let kinds: Vec<TokenKind> = tokens.iter().map(|t| t.kind).collect();
     assert_eq!(
@@ -361,4 +507,236 @@ fn lexes_single_char_operator_at_eof() {
     assert_eq!(tokens[0].kind, TokenKind::Plus);
     assert_eq!(tokens[0].span, Span { start: 0, end: 1 });
     assert_eq!(tokens[1].kind, TokenKind::Eof);
+}
+
+// ----- Wrapping ------------------------------------------------------------
+
+#[test]
+fn lexes_wrapping_operators() {
+    let kinds: Vec<_> = lex("+% -% *% /% <<% >>%")
+        .expect("wrapping operators should lex")
+        .iter()
+        .map(|t| t.kind)
+        .collect();
+    assert_eq!(
+        kinds,
+        vec![
+            TokenKind::PlusWrapping,
+            TokenKind::MinusWrapping,
+            TokenKind::StarWrapping,
+            TokenKind::SlashWrapping,
+            TokenKind::LShiftWrapping,
+            TokenKind::RShiftWrapping,
+            TokenKind::Eof,
+        ]
+    );
+}
+
+// ----- Checked -------------------------------------------------------------
+
+#[test]
+fn lexes_checked_operators() {
+    let kinds: Vec<_> = lex("+? -? *? /? <<? >>?")
+        .expect("checked operators should lex")
+        .iter()
+        .map(|t| t.kind)
+        .collect();
+    assert_eq!(
+        kinds,
+        vec![
+            TokenKind::PlusChecked,
+            TokenKind::MinusChecked,
+            TokenKind::StarChecked,
+            TokenKind::SlashChecked,
+            TokenKind::LShiftChecked,
+            TokenKind::RShiftChecked,
+            TokenKind::Eof,
+        ]
+    );
+}
+
+// ----- Saturating ----------------------------------------------------------
+
+#[test]
+fn lexes_saturating_operators() {
+    let kinds: Vec<_> = lex("+| -| *|")
+        .expect("saturating operators should lex")
+        .iter()
+        .map(|t| t.kind)
+        .collect();
+    assert_eq!(
+        kinds,
+        vec![
+            TokenKind::PlusSaturating,
+            TokenKind::MinusSaturating,
+            TokenKind::StarSaturating,
+            TokenKind::Eof,
+        ]
+    );
+}
+
+// ----- Disambiguation ------------------------------------------------------
+
+#[test]
+fn compound_and_wrapping_are_distinct() {
+    // "+=" (compound assign) must not be confused with "+%" (wrapping).
+    let kinds: Vec<_> = lex("+= +%").unwrap().iter().map(|t| t.kind).collect();
+    assert_eq!(
+        kinds,
+        vec![
+            TokenKind::PlusEquals,
+            TokenKind::PlusWrapping,
+            TokenKind::Eof,
+        ]
+    );
+}
+
+#[test]
+fn saturating_vs_pipe_and_double_pipe() {
+    // "+|" must not lex as "+", "|".
+    // Standalone "|" and "||" must still lex correctly.
+    let kinds: Vec<_> = lex("+| | ||").unwrap().iter().map(|t| t.kind).collect();
+    assert_eq!(
+        kinds,
+        vec![
+            TokenKind::PlusSaturating,
+            TokenKind::Pipe,
+            TokenKind::DoublePipe,
+            TokenKind::Eof,
+        ]
+    );
+}
+
+#[test]
+fn saturating_requires_adjacency() {
+    // With a space: "+ |" is Plus then Pipe (bitwise-or).
+    let kinds: Vec<_> = lex("a + | b").unwrap().iter().map(|t| t.kind).collect();
+    assert_eq!(
+        kinds,
+        vec![
+            TokenKind::Identifier("a"),
+            TokenKind::Plus,
+            TokenKind::Pipe,
+            TokenKind::Identifier("b"),
+            TokenKind::Eof,
+        ]
+    );
+
+    // Without a space: "+|" is one token.
+    let kinds: Vec<_> = lex("a+|b").unwrap().iter().map(|t| t.kind).collect();
+    assert_eq!(
+        kinds,
+        vec![
+            TokenKind::Identifier("a"),
+            TokenKind::PlusSaturating,
+            TokenKind::Identifier("b"),
+            TokenKind::Eof,
+        ]
+    );
+}
+
+#[test]
+fn checked_is_a_single_token() {
+    // "a +? b" — "+?" must be one token.
+    let tokens = lex("a+?b").unwrap();
+    assert_eq!(tokens[1].kind, TokenKind::PlusChecked);
+    // "+?" is 2 bytes at offset 1..3
+    assert_eq!(tokens[1].span, Span { start: 1, end: 3 });
+}
+
+// ----- Spans ---------------------------------------------------------------
+
+#[test]
+fn spans_of_overflow_policy_operators() {
+    for (src, offset, expected_kind, expected_len) in [
+        ("a+%b", 1, TokenKind::PlusWrapping, 2),
+        ("a+?b", 1, TokenKind::PlusChecked, 2),
+        ("a+|b", 1, TokenKind::PlusSaturating, 2),
+        ("a-%b", 1, TokenKind::MinusWrapping, 2),
+        ("a-?b", 1, TokenKind::MinusChecked, 2),
+        ("a-|b", 1, TokenKind::MinusSaturating, 2),
+        ("a*%b", 1, TokenKind::StarWrapping, 2),
+        ("a*?b", 1, TokenKind::StarChecked, 2),
+        ("a*|b", 1, TokenKind::StarSaturating, 2),
+        ("a/%b", 1, TokenKind::SlashWrapping, 2),
+        ("a/?b", 1, TokenKind::SlashChecked, 2),
+        ("a<<%b", 1, TokenKind::LShiftWrapping, 3),
+        ("a<<?b", 1, TokenKind::LShiftChecked, 3),
+        ("a>>%b", 1, TokenKind::RShiftWrapping, 3),
+        ("a>>?b", 1, TokenKind::RShiftChecked, 3),
+    ] {
+        let tokens = lex(src).unwrap();
+        assert_eq!(tokens[1].kind, expected_kind, "input: {src:?}");
+        assert_eq!(
+            tokens[1].span,
+            Span {
+                start: offset,
+                end: offset + expected_len
+            },
+            "span mismatch for {src:?}"
+        );
+    }
+}
+
+// ----- Edge cases ----------------------------------------------------------
+
+#[test]
+fn overflow_policy_operators_at_eof() {
+    for (src, expected_kind) in [
+        ("+%", TokenKind::PlusWrapping),
+        ("+?", TokenKind::PlusChecked),
+        ("+|", TokenKind::PlusSaturating),
+        ("<<%", TokenKind::LShiftWrapping),
+        (">>?", TokenKind::RShiftChecked),
+    ] {
+        let tokens = lex(src).unwrap();
+        assert_eq!(tokens[0].kind, expected_kind, "input: {src:?}");
+        assert_eq!(
+            tokens[0].span,
+            Span {
+                start: 0,
+                end: src.len() as u32
+            },
+            "input: {src:?}"
+        );
+        assert_eq!(tokens[1].kind, TokenKind::Eof);
+    }
+}
+
+#[test]
+fn percent_compound_assignment_is_one_token() {
+    // Regression: the original lexer passed Percent for both kinds,
+    // silently swallowing the `=`.
+    let kinds: Vec<_> = lex("%= %").unwrap().iter().map(|t| t.kind).collect();
+    assert_eq!(
+        kinds,
+        vec![TokenKind::PercentEquals, TokenKind::Percent, TokenKind::Eof,]
+    );
+}
+
+// ----- End-to-end demo -----------------------------------------------------
+
+#[test]
+fn lexes_spec_overflow_examples() {
+    // The three overflow-policy examples from Spec §11.2.
+    let kinds: Vec<_> = lex("250 +% 10  250 +? 10  250 +| 10")
+        .unwrap()
+        .iter()
+        .map(|t| t.kind)
+        .collect();
+    assert_eq!(
+        kinds,
+        vec![
+            TokenKind::Integer("250"),
+            TokenKind::PlusWrapping,
+            TokenKind::Integer("10"),
+            TokenKind::Integer("250"),
+            TokenKind::PlusChecked,
+            TokenKind::Integer("10"),
+            TokenKind::Integer("250"),
+            TokenKind::PlusSaturating,
+            TokenKind::Integer("10"),
+            TokenKind::Eof,
+        ]
+    );
 }
