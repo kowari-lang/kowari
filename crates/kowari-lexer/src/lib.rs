@@ -93,80 +93,17 @@ pub fn lex(src: &'_ str) -> Result<Vec<Token<'_>>, Vec<Diag>> {
         }
 
         let opt: Option<(TokenKind, usize)> = match c {
-            '+' => {
-                let consumed = if try_consume(&mut iter, '=') { 2 } else { 1 };
-                let end = iter.peek().map(|(i, _)| *i).unwrap_or(src.len());
-                let kind = if consumed == 2 {
-                    TokenKind::PlusEquals
-                } else {
-                    TokenKind::Plus
-                };
-                Some((kind, end))
-            }
-            '-' => {
-                let consumed = if try_consume(&mut iter, '=') { 2 } else { 1 };
-                let end = iter.peek().map(|(i, _)| *i).unwrap_or(src.len());
-                let kind = if consumed == 2 {
-                    TokenKind::MinusEquals
-                } else {
-                    TokenKind::Minus
-                };
-                Some((kind, end))
-            }
-            '*' => {
-                let consumed = if try_consume(&mut iter, '=') { 2 } else { 1 };
-                let end = iter.peek().map(|(i, _)| *i).unwrap_or(src.len());
-                let kind = if consumed == 2 {
-                    TokenKind::StarEquals
-                } else {
-                    TokenKind::Star
-                };
-                Some((kind, end))
-            }
-            '/' => {
-                let consumed = if try_consume(&mut iter, '=') { 2 } else { 1 };
-                let end = iter.peek().map(|(i, _)| *i).unwrap_or(src.len());
-                let kind = if consumed == 2 {
-                    TokenKind::SlashEquals
-                } else {
-                    TokenKind::Slash
-                };
-                Some((kind, end))
-            }
-            '%' => {
-                let consumed = if try_consume(&mut iter, '=') { 2 } else { 1 };
-                let end = iter.peek().map(|(i, _)| *i).unwrap_or(src.len());
-                let kind = if consumed == 2 {
-                    TokenKind::PercentEquals
-                } else {
-                    TokenKind::Percent
-                };
-                Some((kind, end))
-            }
-            '!' => {
-                let consumed = if try_consume(&mut iter, '=') { 2 } else { 1 };
-                let end = iter.peek().map(|(i, _)| *i).unwrap_or(src.len());
-                let kind = if consumed == 2 {
-                    TokenKind::NotEquals
-                } else {
-                    TokenKind::Exclamation
-                };
-                Some((kind, end))
-            },
+            '+' => Some(lex_optional_suffix(&mut iter, src.len(), '=', TokenKind::Plus, TokenKind::PlusEquals)),
+            '-' => Some(lex_optional_suffix(&mut iter, src.len(), '=', TokenKind::Minus, TokenKind::MinusEquals)),
+            '*' => Some(lex_optional_suffix(&mut iter, src.len(), '=', TokenKind::Star, TokenKind::StarEquals)),
+            '/' => Some(lex_optional_suffix(&mut iter, src.len(), '=', TokenKind::Slash, TokenKind::SlashEquals)),
+            '%' => Some(lex_optional_suffix(&mut iter, src.len(), '=', TokenKind::Percent, TokenKind::Percent)),
+            '!' => Some(lex_optional_suffix(&mut iter, src.len(), '=', TokenKind::Exclamation, TokenKind::NotEquals)),
             '(' => Some((TokenKind::LParen, start + c.len_utf8())),
             ')' => Some((TokenKind::RParen, start + c.len_utf8())),
             '{' => Some((TokenKind::LBrace, start + c.len_utf8())),
             '}' => Some((TokenKind::RBrace, start + c.len_utf8())),
-            '=' => {
-                let consumed = if try_consume(&mut iter, '=') { 2 } else { 1 };
-                let end = iter.peek().map(|(i, _)| *i).unwrap_or(src.len());
-                let kind = if consumed == 2 {
-                    TokenKind::DoubleEquals
-                } else {
-                    TokenKind::Equals
-                };
-                Some((kind, end))
-            },
+            '=' => Some(lex_optional_suffix(&mut iter, src.len(), '=', TokenKind::Equals, TokenKind::DoubleEquals)),
             '<' => {
                 if try_consume(&mut iter, '<') {
                     // We've got `<<`; is it `<<=`?
@@ -194,26 +131,8 @@ pub fn lex(src: &'_ str) -> Result<Vec<Token<'_>>, Vec<Diag>> {
                     Some((TokenKind::BiggerThen, start + 1))
                 }
             },
-            '&' => {
-                let consumed = if try_consume(&mut iter, '&') { 2 } else { 1 };
-                let end = iter.peek().map(|(i, _)| *i).unwrap_or(src.len());
-                let kind = if consumed == 2 {
-                    TokenKind::DoubleAnd
-                } else {
-                    TokenKind::Ampersand
-                };
-                Some((kind, end))
-            },
-            '|' => {
-                let consumed = if try_consume(&mut iter, '|') { 2 } else { 1 };
-                let end = iter.peek().map(|(i, _)| *i).unwrap_or(src.len());
-                let kind = if consumed == 2 {
-                    TokenKind::DoublePipe
-                } else {
-                    TokenKind::Pipe
-                };
-                Some((kind, end))
-            }
+            '&' => Some(lex_optional_suffix(&mut iter, src.len(), '&', TokenKind::Ampersand, TokenKind::DoubleAnd)),
+            '|' => Some(lex_optional_suffix(&mut iter, src.len(), '|', TokenKind::Pipe, TokenKind::DoublePipe)),
             c if c.is_ascii_digit() => {
                 // Inner loop: consume trailing digits.
                 while iter.peek().is_some_and(|(_, c)| c.is_ascii_digit()) {
@@ -308,6 +227,22 @@ fn try_consume(iter: &mut std::iter::Peekable<std::str::CharIndices>, expected: 
     } else {
         false
     }
+}
+
+/// Lex a punctuator that may be one or two characters (e.g. `+` or `+=`).
+/// Consumes the second character only if it matches `suffix`, then reports
+/// whichever token applies along with the byte offset just past it.
+fn lex_optional_suffix<'src>(
+    iter: &mut std::iter::Peekable<std::str::CharIndices<'src>>,
+    src_len: usize,
+    suffix: char,
+    single: TokenKind<'src>,
+    combined: TokenKind<'src>,
+) -> (TokenKind<'src>, usize) {
+    let kind = if try_consume(iter, suffix) { combined } else { single };
+    // Peek *after* consuming: `end` must sit past the suffix when present.
+    let end = iter.peek().map(|(i, _)| *i).unwrap_or(src_len);
+    (kind, end)
 }
 #[test]
 fn lexes_fn_main() {
@@ -418,4 +353,12 @@ fn lexes_shift_assign_disambiguation() {
 fn span_of_two_char_operator() {
     let tokens = lex("==").unwrap();
     assert_eq!(tokens[0].span, Span { start: 0, end: 2 });
+}
+
+#[test]
+fn lexes_single_char_operator_at_eof() {
+    let tokens = lex("+").unwrap();
+    assert_eq!(tokens[0].kind, TokenKind::Plus);
+    assert_eq!(tokens[0].span, Span { start: 0, end: 1 });
+    assert_eq!(tokens[1].kind, TokenKind::Eof);
 }
