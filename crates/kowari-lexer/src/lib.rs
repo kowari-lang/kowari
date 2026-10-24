@@ -97,7 +97,7 @@ pub fn lex(src: &'_ str) -> Result<Vec<Token<'_>>, Vec<Diag>> {
             '-' => Some(lex_optional_suffix(&mut iter, src.len(), '=', TokenKind::Minus, TokenKind::MinusEquals)),
             '*' => Some(lex_optional_suffix(&mut iter, src.len(), '=', TokenKind::Star, TokenKind::StarEquals)),
             '/' => Some(lex_optional_suffix(&mut iter, src.len(), '=', TokenKind::Slash, TokenKind::SlashEquals)),
-            '%' => Some(lex_optional_suffix(&mut iter, src.len(), '=', TokenKind::Percent, TokenKind::Percent)),
+            '%' => Some(lex_optional_suffix(&mut iter, src.len(), '=', TokenKind::Percent, TokenKind::PercentEquals)),
             '!' => Some(lex_optional_suffix(&mut iter, src.len(), '=', TokenKind::Exclamation, TokenKind::NotEquals)),
             '(' => Some((TokenKind::LParen, start + c.len_utf8())),
             ')' => Some((TokenKind::RParen, start + c.len_utf8())),
