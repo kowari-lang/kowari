@@ -107,6 +107,9 @@ pub enum TokenKind<'src> {
     ExternToken,
     InToken,
     RangeToken,
+    AsToken,
+    BreakToken,
+    ContinueToken,
 
     // Literals
     Integer(&'src str),
@@ -151,7 +154,7 @@ pub fn lex(src: &'_ str) -> Result<Vec<Token<'_>>, Vec<Diag>> {
                     ('%', TokenKind::MinusWrapping),
                     ('?', TokenKind::MinusChecked),
                     ('|', TokenKind::MinusSaturating),
-                    ('>', TokenKind::SmallArrow), // <- NEW
+                    ('>', TokenKind::SmallArrow),
                 ],
             )),
             '*' => Some(lex_operator(
@@ -197,10 +200,7 @@ pub fn lex(src: &'_ str) -> Result<Vec<Token<'_>>, Vec<Diag>> {
                 &mut iter,
                 src.len(),
                 TokenKind::Equals,
-                &[
-                    ('=', TokenKind::DoubleEquals),
-                    ('>', TokenKind::BigArrow), // <- NEW
-                ],
+                &[('=', TokenKind::DoubleEquals), ('>', TokenKind::BigArrow)],
             )),
             '&' => Some(lex_operator(
                 &mut iter,
@@ -270,10 +270,11 @@ pub fn lex(src: &'_ str) -> Result<Vec<Token<'_>>, Vec<Diag>> {
             '[' => Some((TokenKind::LSquareBracket, start + c.len_utf8())),
             ']' => Some((TokenKind::RSquareBracket, start + c.len_utf8())),
             '~' => Some((TokenKind::Tilde, start + c.len_utf8())),
+            '@' => Some((TokenKind::AtSign, start + c.len_utf8())),
             '.' => {
                 if try_consume(&mut iter, '.') {
                     if try_consume(&mut iter, '=') {
-                        Some((TokenKind::RangeInclusive, start + 2))
+                        Some((TokenKind::RangeInclusive, start + 3))
                     } else {
                         Some((TokenKind::DoubleDot, start + 2))
                     }
@@ -400,6 +401,7 @@ pub fn lex(src: &'_ str) -> Result<Vec<Token<'_>>, Vec<Diag>> {
                 let content = &src[content_start..end - 1];
                 Some((TokenKind::Char(content), end))
             }
+            // Numbers
             c if c.is_ascii_digit() => {
                 while iter
                     .peek()
@@ -436,6 +438,7 @@ pub fn lex(src: &'_ str) -> Result<Vec<Token<'_>>, Vec<Diag>> {
 
                 Some((TokenKind::Integer(text), end))
             }
+            // Identifiers/Key-Words
             c if c.is_alphabetic() || c == '_' => {
                 while iter
                     .peek()
@@ -446,32 +449,7 @@ pub fn lex(src: &'_ str) -> Result<Vec<Token<'_>>, Vec<Diag>> {
 
                 let end = iter.peek().map(|(i, _)| *i).unwrap_or(src.len());
                 let text = &src[start..end];
-                let kind = match text {
-                    "fn" => TokenKind::Function,
-                    "let" => TokenKind::LetToken,
-                    "mut" => TokenKind::MutToken,
-                    "if" => TokenKind::IfToken,
-                    "else" => TokenKind::ElseToken,
-                    "match" => TokenKind::MatchToken,
-                    "for" => TokenKind::ForToken,
-                    "while" => TokenKind::WhileToken,
-                    "return" => TokenKind::ReturnToken,
-                    "defer" => TokenKind::Defer,
-                    "errdefer" => TokenKind::ErrDefer,
-                    "struct" => TokenKind::StructToken,
-                    "enum" => TokenKind::EnumToken,
-                    "trait" => TokenKind::TraitToken,
-                    "impl" => TokenKind::ImplToken,
-                    "pub" => TokenKind::PubToken,
-                    "unsafe" => TokenKind::UnsafeToken,
-                    "extern" => TokenKind::ExternToken,
-                    "true" => TokenKind::TrueToken,
-                    "false" => TokenKind::FalseToken,
-                    "loop" => TokenKind::LoopToken,
-                    "in" => TokenKind::InToken,
-                    "range" => TokenKind::RangeToken,
-                    _ => TokenKind::Identifier(text),
-                };
+                let kind = check_for_keyword(text);
                 Some((kind, end))
             }
             _ => {
@@ -509,6 +487,38 @@ pub fn lex(src: &'_ str) -> Result<Vec<Token<'_>>, Vec<Diag>> {
     }
 
     Ok(tokens)
+}
+
+fn check_for_keyword(text: &'_ str) -> TokenKind<'_> {
+    match text {
+        "fn" => TokenKind::Function,
+        "let" => TokenKind::LetToken,
+        "mut" => TokenKind::MutToken,
+        "if" => TokenKind::IfToken,
+        "else" => TokenKind::ElseToken,
+        "match" => TokenKind::MatchToken,
+        "for" => TokenKind::ForToken,
+        "while" => TokenKind::WhileToken,
+        "return" => TokenKind::ReturnToken,
+        "defer" => TokenKind::Defer,
+        "errdefer" => TokenKind::ErrDefer,
+        "struct" => TokenKind::StructToken,
+        "enum" => TokenKind::EnumToken,
+        "trait" => TokenKind::TraitToken,
+        "impl" => TokenKind::ImplToken,
+        "pub" => TokenKind::PubToken,
+        "unsafe" => TokenKind::UnsafeToken,
+        "extern" => TokenKind::ExternToken,
+        "true" => TokenKind::TrueToken,
+        "false" => TokenKind::FalseToken,
+        "loop" => TokenKind::LoopToken,
+        "in" => TokenKind::InToken,
+        "range" => TokenKind::RangeToken,
+        "break" => TokenKind::BreakToken,
+        "continue" => TokenKind::ContinueToken,
+        "as" => TokenKind::AsToken,
+        _ => TokenKind::Identifier(text),
+    }
 }
 
 fn peek_char(iter: &mut std::iter::Peekable<std::str::CharIndices>) -> Option<char> {
@@ -572,8 +582,8 @@ fn lexes_fn_main() {
 
 #[test]
 fn lex_unknown_token_errors() {
-    let mut result = lex("fn main() { @ }");
-    assert!(result.is_err(), "expected lexing to fail on '@'");
+    let mut result = lex("fn main() { ♥ }");
+    assert!(result.is_err(), "expected lexing to fail on '♥'");
 
     let mut diags = result.unwrap_err();
     assert_eq!(
@@ -583,13 +593,13 @@ fn lex_unknown_token_errors() {
     );
 
     let diag = &diags[0];
-    assert_eq!(diag.span, Span { start: 12, end: 13 }); // '@' is at byte 12
+    assert_eq!(diag.span, Span { start: 12, end: 15 });
     assert_eq!(
         diags,
         vec![Diag {
             code: DiagCode("E0001"),
-            span: Span { start: 12, end: 13 },
-            message: "Unexpected token '@'".to_string(),
+            span: Span { start: 12, end: 15 },
+            message: "Unexpected token '♥'".to_string(),
         }]
     );
 
