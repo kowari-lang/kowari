@@ -1,6 +1,6 @@
 //! Lexer: source text → tokens.
 
-use kowari_diagnostics::{Diag, DiagCode, Span};
+use kowari_diagnostics::{Diag, ErrorCode, Span};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct Token<'src> {
@@ -306,7 +306,7 @@ pub fn lex(src: &'_ str) -> Result<Vec<Token<'_>>, Vec<Diag>> {
 
                 if !terminated {
                     errors.push(Diag {
-                        code: DiagCode("E0002"),
+                        code: ErrorCode::UnterminatedString.into(),
                         span: Span {
                             start: start as u32,
                             end: end as u32,
@@ -330,7 +330,7 @@ pub fn lex(src: &'_ str) -> Result<Vec<Token<'_>>, Vec<Diag>> {
                 let Some((_, first)) = iter.next() else {
                     // `'` at EOF
                     errors.push(Diag {
-                        code: DiagCode("E0003"),
+                        code: ErrorCode::UnterminatedChar.into(),
                         span: Span {
                             start: start as u32,
                             end: (start + 1) as u32,
@@ -343,7 +343,7 @@ pub fn lex(src: &'_ str) -> Result<Vec<Token<'_>>, Vec<Diag>> {
                 // Empty char: `''`
                 if first == '\'' {
                     errors.push(Diag {
-                        code: DiagCode("E0004"),
+                        code: ErrorCode::EmptyChar.into(),
                         span: Span {
                             start: start as u32,
                             end: (start + 2) as u32,
@@ -356,7 +356,7 @@ pub fn lex(src: &'_ str) -> Result<Vec<Token<'_>>, Vec<Diag>> {
                 // Escape: must be followed by exactly one char.
                 if first == '\\' && iter.next().is_none() {
                     errors.push(Diag {
-                        code: DiagCode("E0003"),
+                        code: ErrorCode::UnterminatedChar.into(),
                         span: Span {
                             start: start as u32,
                             end: src.len() as u32,
@@ -386,7 +386,7 @@ pub fn lex(src: &'_ str) -> Result<Vec<Token<'_>>, Vec<Diag>> {
                         recovered_end = i + ch.len_utf8();
                     }
                     errors.push(Diag {
-                        code: DiagCode("E0005"),
+                        code: ErrorCode::MultiChar.into(),
                         span: Span {
                             start: start as u32,
                             end: recovered_end as u32,
@@ -419,7 +419,7 @@ pub fn lex(src: &'_ str) -> Result<Vec<Token<'_>>, Vec<Diag>> {
             }
             _ => {
                 errors.push(Diag {
-                    code: DiagCode("E0001"),
+                    code: ErrorCode::UnexpectedToken.into(),
                     span: Span {
                         start: start as u32,
                         end: (start + c.len_utf8()) as u32,
@@ -481,7 +481,7 @@ fn lex_number<'src>(
             let text = &src[start..end];
             if digits_start == end {
                 errors.push(Diag {
-                    code: DiagCode("E0007"),
+                    code: ErrorCode::RadixWithoutDigits.into(),
                     span: Span {
                         start: start as u32,
                         end: end as u32,
@@ -564,7 +564,7 @@ fn validate_separators(text: &str, base: usize, errors: &mut Vec<Diag>) {
     if text.ends_with('_') {
         let end = base + text.len();
         errors.push(Diag {
-            code: DiagCode("E0006"),
+            code: ErrorCode::BadNumericSeparator.into(),
             span: Span {
                 start: (end - 1) as u32,
                 end: end as u32,
@@ -574,7 +574,7 @@ fn validate_separators(text: &str, base: usize, errors: &mut Vec<Diag>) {
     } else if let Some(rel) = text.find("__") {
         let abs = base + rel;
         errors.push(Diag {
-            code: DiagCode("E0006"),
+            code: ErrorCode::BadNumericSeparator.into(),
             span: Span {
                 start: abs as u32,
                 end: (abs + 2) as u32,
@@ -692,7 +692,7 @@ fn lex_unknown_token_errors() {
     assert_eq!(
         diags,
         vec![Diag {
-            code: DiagCode("E0001"),
+            code: ErrorCode::UnexpectedToken.into(),
             span: Span { start: 12, end: 15 },
             message: "Unexpected token '♥'".to_string(),
         }]
@@ -1050,7 +1050,7 @@ fn trailing_underscore_is_rejected() {
     let result = lex("1_");
     assert!(result.is_err(), "trailing '_' should be a diagnostic");
     let diags = result.unwrap_err();
-    assert_eq!(diags[0].code, DiagCode("E0006"));
+    assert_eq!(diags[0].code, ErrorCode::BadNumericSeparator.into(),);
     assert_eq!(diags[0].span, Span { start: 1, end: 2 });
 }
 
@@ -1059,7 +1059,7 @@ fn double_underscore_is_rejected() {
     let result = lex("1__2");
     assert!(result.is_err(), "double '_' should be a diagnostic");
     let diags = result.unwrap_err();
-    assert_eq!(diags[0].code, DiagCode("E0006"));
+    assert_eq!(diags[0].code, ErrorCode::BadNumericSeparator.into(),);
 }
 
 #[test]
@@ -1089,7 +1089,7 @@ fn lexes_escaped_quote_char() {
 fn empty_char_is_an_error() {
     let diags = lex("''").unwrap_err();
     assert_eq!(diags.len(), 1, "got: {diags:?}");
-    assert_eq!(diags[0].code, DiagCode("E0004"));
+    assert_eq!(diags[0].code, ErrorCode::EmptyChar.into(),);
     assert_eq!(diags[0].span, Span { start: 0, end: 2 });
 }
 
@@ -1098,7 +1098,7 @@ fn multi_char_is_an_error_and_recovers() {
     // 'ab' — should consume through the closing quote and produce one diag.
     let diags = lex("'ab' + 1").unwrap_err();
     assert_eq!(diags.len(), 1, "got: {diags:?}");
-    assert_eq!(diags[0].code, DiagCode("E0005"));
+    assert_eq!(diags[0].code, ErrorCode::MultiChar.into());
     assert_eq!(diags[0].span, Span { start: 0, end: 4 });
 }
 
@@ -1106,21 +1106,21 @@ fn multi_char_is_an_error_and_recovers() {
 fn unterminated_char_is_an_error() {
     let diags = lex("'a").unwrap_err();
     assert_eq!(diags.len(), 1, "got: {diags:?}");
-    assert_eq!(diags[0].code, DiagCode("E0005"));
+    assert_eq!(diags[0].code, ErrorCode::MultiChar.into());
 }
 
 #[test]
 fn bare_quote_at_eof_is_an_error() {
     let diags = lex("'").unwrap_err();
     assert_eq!(diags.len(), 1, "got: {diags:?}");
-    assert_eq!(diags[0].code, DiagCode("E0003"));
+    assert_eq!(diags[0].code, ErrorCode::UnterminatedChar.into());
 }
 
 #[test]
 fn unterminated_escape_is_an_error() {
     let diags = lex(r"'\").unwrap_err();
     assert_eq!(diags.len(), 1, "got: {diags:?}");
-    assert_eq!(diags[0].code, DiagCode("E0003"));
+    assert_eq!(diags[0].code, ErrorCode::UnterminatedChar.into());
 }
 
 #[test]
@@ -1325,5 +1325,5 @@ fn radix_literals() {
 #[test]
 fn radix_without_digits_is_an_error() {
     let diags = lex("0x").unwrap_err();
-    assert_eq!(diags[0].code, DiagCode("E0007"));
+    assert_eq!(diags[0].code, ErrorCode::RadixWithoutDigits.into());
 }

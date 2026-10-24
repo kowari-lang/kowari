@@ -1,5 +1,8 @@
 //! Diagnostic codes, spans, and rendering.
 
+mod codes;
+pub use codes::ErrorCode;
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct Span {
     pub start: u32,
