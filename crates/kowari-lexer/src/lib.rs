@@ -105,6 +105,8 @@ pub enum TokenKind<'src> {
     PubToken,
     UnsafeToken,
     ExternToken,
+    InToken,
+    RangeToken,
 
     // Literals
     Integer(&'src str),
@@ -242,6 +244,17 @@ pub fn lex(src: &'_ str) -> Result<Vec<Token<'_>>, Vec<Diag>> {
                 TokenKind::DoublePipe,
             )),
             '~' => Some((TokenKind::Tilde, start + c.len_utf8())),
+            '.' => {
+                if try_consume(&mut iter, '.') {
+                    if try_consume(&mut iter, '=') {
+                        Some((TokenKind::RangeInclusive, start + 2))
+                    } else {
+                        Some((TokenKind::DoubleDot, start + 2))
+                    }
+                } else {
+                    Some((TokenKind::Dot, start + 1))
+                }
+            },
             c if c.is_ascii_digit() => {
                 // Inner loop: consume trailing digits.
                 while iter.peek().is_some_and(|(_, c)| c.is_ascii_digit()) {
@@ -283,6 +296,8 @@ pub fn lex(src: &'_ str) -> Result<Vec<Token<'_>>, Vec<Diag>> {
                     "true" => TokenKind::TrueToken,
                     "false" => TokenKind::FalseToken,
                     "loop" => TokenKind::LoopToken,
+                    "in" => TokenKind::InToken,
+                    "range" => TokenKind::RangeToken,
                     _ => TokenKind::Identifier(text),
                 };
                 Some((kind, end))
@@ -736,6 +751,26 @@ fn lexes_spec_overflow_examples() {
             TokenKind::Integer("250"),
             TokenKind::PlusSaturating,
             TokenKind::Integer("10"),
+            TokenKind::Eof,
+        ]
+    );
+}
+
+#[test]
+fn dot_and_range() {
+    let kinds: Vec<_> = lex(". .. ..= in range")
+        .unwrap()
+        .iter()
+        .map(|t| t.kind)
+        .collect();
+    assert_eq!(
+        kinds,
+        vec![
+            TokenKind::Dot,
+            TokenKind::DoubleDot,
+            TokenKind::RangeInclusive,
+            TokenKind::InToken,
+            TokenKind::RangeToken,
             TokenKind::Eof,
         ]
     );
