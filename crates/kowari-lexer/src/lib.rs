@@ -402,42 +402,7 @@ pub fn lex(src: &'_ str) -> Result<Vec<Token<'_>>, Vec<Diag>> {
                 Some((TokenKind::Char(content), end))
             }
             // Numbers
-            c if c.is_ascii_digit() => {
-                while iter
-                    .peek()
-                    .is_some_and(|(_, c)| c.is_ascii_digit() || *c == '_')
-                {
-                    iter.next();
-                }
-                let end = iter.peek().map(|(i, _)| *i).unwrap_or(src.len());
-                let text = &src[start..end];
-
-                // Reject a trailing '_' and any "__" sequence.
-                if text.ends_with('_') {
-                    errors.push(Diag {
-                        code: DiagCode("E0006"),
-                        span: Span {
-                            start: (end - 1) as u32,
-                            end: end as u32,
-                        },
-                        message: "Integer literal cannot end with '_'".to_string(),
-                    });
-                } else if text.contains("__") {
-                    // Report the first offending pair.
-                    let rel = text.find("__").unwrap();
-                    let abs = start + rel;
-                    errors.push(Diag {
-                        code: DiagCode("E0006"),
-                        span: Span {
-                            start: abs as u32,
-                            end: (abs + 2) as u32,
-                        },
-                        message: "Integer literal cannot contain consecutive '_'".to_string(),
-                    });
-                }
-
-                Some((TokenKind::Integer(text), end))
-            }
+            c if c.is_ascii_digit() => Some(lex_number(&mut iter, src, start, &mut errors)),
             // Identifiers/Key-Words
             c if c.is_alphabetic() || c == '_' => {
                 while iter
@@ -487,6 +452,136 @@ pub fn lex(src: &'_ str) -> Result<Vec<Token<'_>>, Vec<Diag>> {
     }
 
     Ok(tokens)
+}
+
+fn lex_number<'src>(
+    iter: &mut std::iter::Peekable<std::str::CharIndices<'src>>,
+    src: &'src str,
+    start: usize,
+    errors: &mut Vec<Diag>,
+) -> (TokenKind<'src>, usize) {
+    // --- Radix-prefixed integers: 0x… / 0b… / 0o… -----------------------
+    if src.as_bytes()[start] == b'0' {
+        let radix = match iter.peek().map(|&(_, c)| c) {
+            Some('x') | Some('X') => Some(16u32),
+            Some('b') | Some('B') => Some(2),
+            Some('o') | Some('O') => Some(8),
+            _ => None,
+        };
+        if let Some(radix) = radix {
+            iter.next(); // consume 'x' / 'b' / 'o'
+            let digits_start = iter.peek().map(|(i, _)| *i).unwrap_or(src.len());
+            while iter
+                .peek()
+                .is_some_and(|(_, c)| c.is_digit(radix) || *c == '_')
+            {
+                iter.next();
+            }
+            let end = iter.peek().map(|(i, _)| *i).unwrap_or(src.len());
+            let text = &src[start..end];
+            if digits_start == end {
+                errors.push(Diag {
+                    code: DiagCode("E0007"),
+                    span: Span {
+                        start: start as u32,
+                        end: end as u32,
+                    },
+                    message: "Expected digits after radix prefix".to_string(),
+                });
+            } else {
+                validate_separators(text, start, errors);
+            }
+            return (TokenKind::Integer(text), end);
+        }
+    }
+
+    // --- Decimal integer part --------------------------------------------
+    while iter
+        .peek()
+        .is_some_and(|(_, c)| c.is_ascii_digit() || *c == '_')
+    {
+        iter.next();
+    }
+
+    // --- Fractional part: only when `.` is followed by a digit ------------
+    // This is what stops `1..2` (range) from being lexed as a float.
+    let mut is_float = false;
+    if let Some(&(dot_idx, '.')) = iter.peek() {
+        let after_dot = src[dot_idx + 1..].chars().next();
+        if after_dot.is_some_and(|c| c.is_ascii_digit()) {
+            iter.next(); // consume '.'
+            while iter
+                .peek()
+                .is_some_and(|(_, c)| c.is_ascii_digit() || *c == '_')
+            {
+                iter.next();
+            }
+            is_float = true;
+        }
+    }
+
+    // --- Exponent: `e`/`E` [`+`/`-`] digit+ -------------------------------
+    if let Some(&(e_idx, 'e' | 'E')) = iter.peek() {
+        let mut chars = src[e_idx..].chars();
+        chars.next(); // the 'e' / 'E'
+        let mut sign_seen = false;
+        let mut next = chars.next();
+        if next == Some('+') || next == Some('-') {
+            sign_seen = true;
+            next = chars.next();
+        }
+        if next.is_some_and(|c| c.is_ascii_digit()) {
+            iter.next(); // consume 'e' / 'E'
+            if sign_seen {
+                iter.next();
+            }
+            while iter
+                .peek()
+                .is_some_and(|(_, c)| c.is_ascii_digit() || *c == '_')
+            {
+                iter.next();
+            }
+            is_float = true;
+        }
+        // Malformed (`1e+`, `1e`) → leave `e` for the identifier arm.
+    }
+
+    let end = iter.peek().map(|(i, _)| *i).unwrap_or(src.len());
+    let text = &src[start..end];
+    validate_separators(text, start, errors);
+
+    let kind = if is_float {
+        TokenKind::Float(text)
+    } else {
+        TokenKind::Integer(text)
+    };
+    (kind, end)
+}
+
+/// Reject `1_` / `1__2`-style separators. `base` is the byte offset of `text`
+/// in `src` so diagnostics point at the right column.
+fn validate_separators(text: &str, base: usize, errors: &mut Vec<Diag>) {
+    if text.ends_with('_') {
+        let end = base + text.len();
+        errors.push(Diag {
+            code: DiagCode("E0006"),
+            span: Span {
+                start: (end - 1) as u32,
+                end: end as u32,
+            },
+            message: "Numeric literal cannot end with '_'".to_string(),
+        });
+    } else if let Some(rel) = text.find("__") {
+        let abs = base + rel;
+        errors.push(Diag {
+            code: DiagCode("E0006"),
+            span: Span {
+                start: abs as u32,
+                end: (abs + 2) as u32,
+            },
+            message: "Numeric literal cannot contain consecutive '_'".to_string(),
+        });
+    }
 }
 
 fn check_for_keyword(text: &'_ str) -> TokenKind<'_> {
@@ -1158,4 +1253,77 @@ fn match_arm_with_fat_arrow() {
             TokenKind::Eof,
         ]
     );
+}
+
+#[test]
+fn lexes_floats() {
+    let kinds: Vec<_> = lex("3.14 1e10 1.5e-3 2E+8 0.0")
+        .unwrap()
+        .iter()
+        .map(|t| t.kind)
+        .collect();
+    assert_eq!(
+        kinds,
+        vec![
+            TokenKind::Float("3.14"),
+            TokenKind::Float("1e10"),
+            TokenKind::Float("1.5e-3"),
+            TokenKind::Float("2E+8"),
+            TokenKind::Float("0.0"),
+            TokenKind::Eof,
+        ]
+    );
+}
+
+#[test]
+fn range_is_not_a_float() {
+    let kinds: Vec<_> = lex("1..2").unwrap().iter().map(|t| t.kind).collect();
+    assert_eq!(
+        kinds,
+        vec![
+            TokenKind::Integer("1"),
+            TokenKind::DoubleDot,
+            TokenKind::Integer("2"),
+            TokenKind::Eof,
+        ]
+    );
+}
+
+#[test]
+fn float_then_dot_recovers() {
+    let kinds: Vec<_> = lex("1.5.6").unwrap().iter().map(|t| t.kind).collect();
+    assert_eq!(
+        kinds,
+        vec![
+            TokenKind::Float("1.5"),
+            TokenKind::Dot,
+            TokenKind::Integer("6"),
+            TokenKind::Eof,
+        ]
+    );
+}
+
+#[test]
+fn radix_literals() {
+    let kinds: Vec<_> = lex("0xFF 0b1010 0o777 0xFF_FF")
+        .unwrap()
+        .iter()
+        .map(|t| t.kind)
+        .collect();
+    assert_eq!(
+        kinds,
+        vec![
+            TokenKind::Integer("0xFF"),
+            TokenKind::Integer("0b1010"),
+            TokenKind::Integer("0o777"),
+            TokenKind::Integer("0xFF_FF"),
+            TokenKind::Eof,
+        ]
+    );
+}
+
+#[test]
+fn radix_without_digits_is_an_error() {
+    let diags = lex("0x").unwrap_err();
+    assert_eq!(diags[0].code, DiagCode("E0007"));
 }
