@@ -59,6 +59,9 @@ pub enum TokenKind<'src> {
     SmallArrow,         // ->
     BigArrow,           // =>
     DoubleQuestionMark, // ??
+    BitwiseAndEquals,   // &=
+    BitwiseOrEquals,    // |=
+    BitwiseXorEquals,   // ^=
 
     // Overflow-policy operators (see Spec §11.2)
 
@@ -109,6 +112,16 @@ pub enum TokenKind<'src> {
     AsToken,
     BreakToken,
     ContinueToken,
+    UseToken,
+    CrateToken,
+    SelfValueToken,
+    SelfTypeToken,
+    ConstToken,
+    StaticToken,
+    TypeDefToken,
+    WhereToken,
+    ModuleToken,
+    DynToken,
 
     // Literals
     Integer(&'src str),
@@ -400,6 +413,7 @@ pub fn lex(src: &'_ str) -> Result<Vec<Token<'_>>, Vec<Diag>> {
                     // Recover by consuming up to and including the next `'`,
                     // stopping at newline if we hit one first.
                     let mut recovered_end = iter.peek().map(|(i, _)| *i).unwrap_or(src.len());
+                    let mut found_closing_quote = false;
                     while let Some((i, ch)) = iter.peek().copied() {
                         if ch == '\n' || ch == '\r' {
                             recovered_end = i;
@@ -408,18 +422,29 @@ pub fn lex(src: &'_ str) -> Result<Vec<Token<'_>>, Vec<Diag>> {
                         if ch == '\'' {
                             iter.next();
                             recovered_end = i + 1;
+                            found_closing_quote = true;
                             break;
                         }
                         iter.next();
                         recovered_end = i + ch.len_utf8();
                     }
+
+                    let (code, message) = if found_closing_quote {
+                        (
+                            ErrorCode::MultiChar,
+                            "Char literal must contain exactly one character",
+                        )
+                    } else {
+                        (ErrorCode::UnterminatedChar, "Unterminated char literal")
+                    };
+
                     errors.push(Diag {
-                        code: ErrorCode::MultiChar.into(),
+                        code: code.into(),
                         span: Span {
                             start: start as u32,
                             end: recovered_end as u32,
                         },
-                        message: "Char literal must contain exactly one character".to_string(),
+                        message: message.to_string(),
                     });
                     continue;
                 }
@@ -651,6 +676,16 @@ fn check_for_keyword(text: &'_ str) -> TokenKind<'_> {
         "break" => TokenKind::BreakToken,
         "continue" => TokenKind::ContinueToken,
         "as" => TokenKind::AsToken,
+        "crate" => TokenKind::CrateToken,
+        "use" => TokenKind::UseToken,
+        "self" => TokenKind::SelfValueToken,
+        "Self" => TokenKind::SelfTypeToken,
+        "const" => TokenKind::ConstToken,
+        "static" => TokenKind::StaticToken,
+        "type" => TokenKind::TypeDefToken,
+        "where" => TokenKind::WhereToken,
+        "module" => TokenKind::ModuleToken,
+        "dyn" => TokenKind::DynToken,
         _ => TokenKind::Identifier(text),
     }
 }
@@ -1225,7 +1260,7 @@ mod tests {
     fn unterminated_char_is_an_error() {
         let diags = lex("'a").unwrap_err();
         assert_eq!(diags.len(), 1, "got: {diags:?}");
-        assert_eq!(diags[0].code, ErrorCode::MultiChar.into());
+        assert_eq!(diags[0].code, ErrorCode::UnterminatedChar.into());
     }
 
     #[test]
