@@ -29,8 +29,8 @@ pub enum TokenKind<'src> {
     Caret,          // ^
     HashTag,        // #
     AtSign,         // @
-    BiggerThen,     // >
-    SmallerThen,    // <
+    GreaterThan,    // >
+    LessThan,       // <
     Exclamation,    // !
     Colon,          // :
     Semicolon,      // ;
@@ -249,19 +249,31 @@ pub fn lex(src: &'_ str) -> Result<Vec<Token<'_>>, Vec<Diag>> {
                 &mut iter,
                 src.len(),
                 TokenKind::Ampersand,
-                &[('&', TokenKind::DoubleAnd)],
+                &[
+                    ('&', TokenKind::DoubleAnd),
+                    ('=', TokenKind::BitwiseAndEquals),
+                ],
             )),
             '|' => Some(lex_operator(
                 &mut iter,
                 src.len(),
                 TokenKind::Pipe,
-                &[('|', TokenKind::DoublePipe)],
+                &[
+                    ('|', TokenKind::DoublePipe),
+                    ('=', TokenKind::BitwiseOrEquals),
+                ],
             )),
             ':' => Some(lex_operator(
                 &mut iter,
                 src.len(),
                 TokenKind::Colon,
                 &[(':', TokenKind::DoubleColon)],
+            )),
+            '^' => Some(lex_operator(
+                &mut iter,
+                src.len(),
+                TokenKind::Caret,
+                &[('=', TokenKind::BitwiseXorEquals)],
             )),
             '<' => {
                 // Two-stage: `<<` has its own suffix set; otherwise `<` vs `<=`.
@@ -280,7 +292,7 @@ pub fn lex(src: &'_ str) -> Result<Vec<Token<'_>>, Vec<Diag>> {
                     Some(lex_operator(
                         &mut iter,
                         src.len(),
-                        TokenKind::SmallerThen,
+                        TokenKind::LessThan,
                         &[('=', TokenKind::SmallerOrEquals)],
                     ))
                 }
@@ -301,7 +313,7 @@ pub fn lex(src: &'_ str) -> Result<Vec<Token<'_>>, Vec<Diag>> {
                     Some(lex_operator(
                         &mut iter,
                         src.len(),
-                        TokenKind::BiggerThen,
+                        TokenKind::GreaterThan,
                         &[('=', TokenKind::BiggerOrEquals)],
                     ))
                 }
