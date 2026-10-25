@@ -363,10 +363,7 @@ pub fn lex(src: &'_ str) -> Result<Vec<Token<'_>>, Vec<Diag>> {
                 if !terminated {
                     errors.push(Diag {
                         code: ErrorCode::UnterminatedString.into(),
-                        span: Span {
-                            start: start as u32,
-                            end: end as u32,
-                        },
+                        span: Span { start, end },
                         message: "Unterminated string literal".to_string(),
                     });
                     None
@@ -388,8 +385,8 @@ pub fn lex(src: &'_ str) -> Result<Vec<Token<'_>>, Vec<Diag>> {
                     errors.push(Diag {
                         code: ErrorCode::UnterminatedChar.into(),
                         span: Span {
-                            start: start as u32,
-                            end: (start + 1) as u32,
+                            start,
+                            end: start + 1,
                         },
                         message: "Unterminated char literal".to_string(),
                     });
@@ -401,8 +398,8 @@ pub fn lex(src: &'_ str) -> Result<Vec<Token<'_>>, Vec<Diag>> {
                     errors.push(Diag {
                         code: ErrorCode::EmptyChar.into(),
                         span: Span {
-                            start: start as u32,
-                            end: (start + 2) as u32,
+                            start,
+                            end: start + 2,
                         },
                         message: "Empty char literal".to_string(),
                     });
@@ -414,8 +411,8 @@ pub fn lex(src: &'_ str) -> Result<Vec<Token<'_>>, Vec<Diag>> {
                     errors.push(Diag {
                         code: ErrorCode::UnterminatedChar.into(),
                         span: Span {
-                            start: start as u32,
-                            end: src.len() as u32,
+                            start,
+                            end: src.len(),
                         },
                         message: "Unterminated char literal".to_string(),
                     });
@@ -456,8 +453,8 @@ pub fn lex(src: &'_ str) -> Result<Vec<Token<'_>>, Vec<Diag>> {
                     errors.push(Diag {
                         code: code.into(),
                         span: Span {
-                            start: start as u32,
-                            end: recovered_end as u32,
+                            start,
+                            end: recovered_end,
                         },
                         message: message.to_string(),
                     });
@@ -489,8 +486,8 @@ pub fn lex(src: &'_ str) -> Result<Vec<Token<'_>>, Vec<Diag>> {
                 errors.push(Diag {
                     code: ErrorCode::UnexpectedToken.into(),
                     span: Span {
-                        start: start as u32,
-                        end: (start + c.len_utf8()) as u32,
+                        start,
+                        end: start + c.len_utf8(),
                     },
                     message: format!("Unexpected token '{c}'"),
                 });
@@ -500,18 +497,15 @@ pub fn lex(src: &'_ str) -> Result<Vec<Token<'_>>, Vec<Diag>> {
         if let Some((kind, end)) = opt {
             tokens.push(Token {
                 kind,
-                span: Span {
-                    start: start as u32,
-                    end: end as u32,
-                },
+                span: Span { start, end },
             })
         }
     }
     tokens.push(Token {
         kind: TokenKind::Eof,
         span: Span {
-            start: src.len() as u32,
-            end: src.len() as u32,
+            start: src.len(),
+            end: src.len(),
         },
     });
 
@@ -629,10 +623,7 @@ fn parse_radix_integer<'src>(
     if !has_digit {
         errors.push(Diag {
             code: ErrorCode::RadixWithoutDigits.into(),
-            span: Span {
-                start: start as u32,
-                end: end as u32,
-            },
+            span: Span { start, end },
             message: "Expected digits after radix prefix".to_string(),
         });
         return Some((TokenKind::Integer(&src[start..end]), end));
@@ -644,7 +635,7 @@ fn parse_radix_integer<'src>(
 /// Shared tail for every numeric literal: consume an optional `u32`/`f64`/…
 /// suffix, validate `_` separators, and build the token.
 fn finish_number<'src>(
-    iter: &mut std::iter::Peekable<std::str::CharIndices<'src>>,
+    iter: &mut Peekable<CharIndices<'src>>,
     src: &'src str,
     start: usize,
     end: usize,
@@ -670,8 +661,8 @@ fn validate_separators(text: &str, base: usize, errors: &mut Vec<Diag>) {
         errors.push(Diag {
             code: ErrorCode::BadNumericSeparator.into(),
             span: Span {
-                start: (end - 1) as u32,
-                end: end as u32,
+                start: end - 1,
+                end,
             },
             message: "Numeric literal cannot end with '_'".to_string(),
         });
@@ -680,8 +671,8 @@ fn validate_separators(text: &str, base: usize, errors: &mut Vec<Diag>) {
         errors.push(Diag {
             code: ErrorCode::BadNumericSeparator.into(),
             span: Span {
-                start: abs as u32,
-                end: (abs + 2) as u32,
+                start: abs,
+                end: abs + 2,
             },
             message: "Numeric literal cannot contain consecutive '_'".to_string(),
         });
@@ -730,12 +721,12 @@ fn check_for_keyword(text: &'_ str) -> TokenKind<'_> {
     }
 }
 
-fn peek_char(iter: &mut std::iter::Peekable<std::str::CharIndices>) -> Option<char> {
+fn peek_char(iter: &mut Peekable<CharIndices>) -> Option<char> {
     iter.peek().map(|(_, c)| *c)
 }
 
 /// Consume the next char if it equals `expected`. Returns true if consumed.
-fn try_consume(iter: &mut std::iter::Peekable<std::str::CharIndices>, expected: char) -> bool {
+fn try_consume(iter: &mut Peekable<CharIndices>, expected: char) -> bool {
     if peek_char(iter) == Some(expected) {
         iter.next();
         true
@@ -747,7 +738,7 @@ fn try_consume(iter: &mut std::iter::Peekable<std::str::CharIndices>, expected: 
 /// Lex an operator whose kind is determined by an optional one-character
 /// suffix. `single` is the kind when no listed suffix matches.
 fn lex_operator<'src>(
-    iter: &mut std::iter::Peekable<std::str::CharIndices<'src>>,
+    iter: &mut Peekable<CharIndices<'src>>,
     src_len: usize,
     single: TokenKind<'src>,
     suffixes: &[(char, TokenKind<'src>)],
@@ -767,7 +758,7 @@ fn lex_operator<'src>(
 }
 
 /// Skip to end-of-line (or EOF). The initial `//` has already been consumed.
-fn skip_line_comment(iter: &mut std::iter::Peekable<std::str::CharIndices>) {
+fn skip_line_comment(iter: &mut Peekable<CharIndices>) {
     for (_, ch) in iter.by_ref() {
         if ch == '\n' {
             break;
@@ -779,7 +770,7 @@ fn skip_line_comment(iter: &mut std::iter::Peekable<std::str::CharIndices>) {
 /// has already been consumed. Returns `Err(span)` on EOF before the
 /// matching `*/`.
 fn skip_block_comment(
-    iter: &mut std::iter::Peekable<std::str::CharIndices>,
+    iter: &mut Peekable<CharIndices>,
     start: usize,
     src_len: usize,
 ) -> Result<(), Span> {
@@ -800,8 +791,8 @@ fn skip_block_comment(
         }
     }
     Err(Span {
-        start: start as u32,
-        end: src_len as u32,
+        start,
+        end: src_len,
     })
 }
 
@@ -827,11 +818,7 @@ fn match_suffix(src: &str, end: usize) -> Option<usize> {
 /// Consume the suffix in `iter` and return the new end offset, or `end`
 /// unchanged if no suffix follows. All suffix chars are ASCII, so byte
 /// length equals char count.
-fn consume_suffix(
-    iter: &mut std::iter::Peekable<std::str::CharIndices>,
-    src: &str,
-    end: usize,
-) -> usize {
+fn consume_suffix(iter: &mut Peekable<CharIndices>, src: &str, end: usize) -> usize {
     match match_suffix(src, end) {
         Some(len) => {
             for _ in 0..len {
@@ -1151,7 +1138,7 @@ mod tests {
                 tokens[0].span,
                 Span {
                     start: 0,
-                    end: src.len() as u32
+                    end: src.len()
                 },
                 "input: {src:?}"
             );
