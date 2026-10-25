@@ -46,8 +46,8 @@ pub enum TokenKind<'src> {
     Equals,             // =
     DoubleEquals,       // ==
     NotEquals,          // !=
-    BiggerOrEquals,     // >=
-    SmallerOrEquals,    // <=
+    GreaterOrEquals,    // >=
+    LessOrEquals,       // <=
     DoubleAnd,          // &&
     DoublePipe,         // ||
     PlusEquals,         // +=
@@ -124,6 +124,7 @@ pub enum TokenKind<'src> {
     WhereToken,
     ModuleToken,
     DynToken,
+    UnionToken,
 
     // Literals
     Integer(&'src str),
@@ -293,7 +294,7 @@ pub fn lex(src: &'_ str) -> Result<Vec<Token<'_>>, Vec<Diag>> {
                         &mut iter,
                         src.len(),
                         TokenKind::LessThan,
-                        &[('=', TokenKind::SmallerOrEquals)],
+                        &[('=', TokenKind::LessOrEquals)],
                     ))
                 }
             }
@@ -314,7 +315,7 @@ pub fn lex(src: &'_ str) -> Result<Vec<Token<'_>>, Vec<Diag>> {
                         &mut iter,
                         src.len(),
                         TokenKind::GreaterThan,
-                        &[('=', TokenKind::BiggerOrEquals)],
+                        &[('=', TokenKind::GreaterOrEquals)],
                     ))
                 }
             }
@@ -716,8 +717,9 @@ fn check_for_keyword(text: &'_ str) -> TokenKind<'_> {
         "static" => TokenKind::StaticToken,
         "type" => TokenKind::TypeDefToken,
         "where" => TokenKind::WhereToken,
-        "module" => TokenKind::ModuleToken,
+        "mod" => TokenKind::ModuleToken,
         "dyn" => TokenKind::DynToken,
+        "union" => TokenKind::UnionToken,
         _ => TokenKind::Identifier(text),
     }
 }
@@ -913,8 +915,8 @@ mod tests {
             vec![
                 TokenKind::DoubleEquals,
                 TokenKind::NotEquals,
-                TokenKind::SmallerOrEquals,
-                TokenKind::BiggerOrEquals,
+                TokenKind::LessOrEquals,
+                TokenKind::GreaterOrEquals,
                 TokenKind::DoubleAnd,
                 TokenKind::DoublePipe,
                 TokenKind::LShift,
