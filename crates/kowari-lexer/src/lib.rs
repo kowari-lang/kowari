@@ -1,6 +1,8 @@
 //! Lexer: source text → tokens.
 
 use kowari_diagnostics::{Diag, ErrorCode, Span};
+use std::iter::Peekable;
+use std::str::CharIndices;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct Token<'src> {
@@ -509,55 +511,41 @@ pub fn lex(src: &'_ str) -> Result<Vec<Token<'_>>, Vec<Diag>> {
 }
 
 fn lex_number<'src>(
-    iter: &mut std::iter::Peekable<std::str::CharIndices<'src>>,
+    iter: &mut Peekable<CharIndices<'src>>,
     src: &'src str,
     start: usize,
     errors: &mut Vec<Diag>,
 ) -> (TokenKind<'src>, usize) {
     // --- Radix-prefixed integers ------------------------------------------
     if src.as_bytes()[start] == b'0' {
-        let radix = match iter.peek().map(|&(_, c)| c) {
-            Some('x') | Some('X') => Some(16u32),
-            Some('b') | Some('B') => Some(2),
-            Some('o') | Some('O') => Some(8),
-            _ => None,
-        };
-        if let Some(radix) = radix {
-            iter.next();
-            let digits_start = iter.peek().map(|(i, _)| *i).unwrap_or(src.len());
-            while iter
-                .peek()
-                .is_some_and(|(_, c)| c.is_digit(radix) || *c == '_')
-            {
-                iter.next();
-            }
-            let end = iter.peek().map(|(i, _)| *i).unwrap_or(src.len());
-
-            let has_digit = src[digits_start..end].chars().any(|c| c.is_digit(radix));
-            if !has_digit {
-                errors.push(Diag {
-                    code: ErrorCode::RadixWithoutDigits.into(),
-                    span: Span {
-                        start: start as u32,
-                        end: end as u32,
-                    },
-                    message: "Expected digits after radix prefix".to_string(),
-                });
-                return (TokenKind::Integer(&src[start..end]), end);
-            }
-            return finish_number(iter, src, start, end, false, errors);
+        if let Some(result) = parse_radix_integer(iter, src, start, errors) {
+            return result;
         }
     }
 
     // --- Decimal integer part ---------------------------------------------
+    parse_decimal_integer(iter);
+
+    // --- Fractional part ---------------------------------------------------
+    let mut is_float = parse_fraction(iter, src);
+
+    // --- Exponent ----------------------------------------------------------
+    is_float |= parse_exponent(iter, src);
+
+    let end = iter.peek().map(|(i, _)| *i).unwrap_or(src.len());
+    finish_number(iter, src, start, end, is_float, errors)
+}
+
+fn parse_decimal_integer(iter: &mut Peekable<CharIndices>) {
     while iter
         .peek()
         .is_some_and(|(_, c)| c.is_ascii_digit() || *c == '_')
     {
         iter.next();
     }
+}
 
-    // --- Fractional part ---------------------------------------------------
+fn parse_fraction(iter: &mut Peekable<CharIndices>, src: &str) -> bool {
     let mut is_float = false;
     if let Some(&(dot_idx, '.')) = iter.peek() {
         let after_dot = src[dot_idx + 1..].chars().next();
@@ -572,8 +560,10 @@ fn lex_number<'src>(
             is_float = true;
         }
     }
+    is_float
+}
 
-    // --- Exponent ----------------------------------------------------------
+fn parse_exponent(iter: &mut Peekable<CharIndices>, src: &str) -> bool {
     if let Some(&(e_idx, 'e' | 'E')) = iter.peek() {
         let mut chars = src[e_idx..].chars();
         chars.next();
@@ -594,12 +584,49 @@ fn lex_number<'src>(
             {
                 iter.next();
             }
-            is_float = true;
+            return true;
         }
     }
+    false
+}
 
+fn parse_radix_integer<'src>(
+    iter: &mut Peekable<CharIndices<'src>>,
+    src: &'src str,
+    start: usize,
+    errors: &mut Vec<Diag>,
+) -> Option<(TokenKind<'src>, usize)> {
+    let radix = match iter.peek().map(|&(_, c)| c) {
+        Some('x') | Some('X') => 16u32,
+        Some('b') | Some('B') => 2,
+        Some('o') | Some('O') => 8,
+        _ => return None,
+    };
+    iter.next();
+
+    let digits_start = iter.peek().map(|(i, _)| *i).unwrap_or(src.len());
+    while iter
+        .peek()
+        .is_some_and(|(_, c)| c.is_digit(radix) || *c == '_')
+    {
+        iter.next();
+    }
     let end = iter.peek().map(|(i, _)| *i).unwrap_or(src.len());
-    finish_number(iter, src, start, end, is_float, errors)
+
+    let has_digit = src[digits_start..end].chars().any(|c| c.is_digit(radix));
+    if !has_digit {
+        errors.push(Diag {
+            code: ErrorCode::RadixWithoutDigits.into(),
+            span: Span {
+                start: start as u32,
+                end: end as u32,
+            },
+            message: "Expected digits after radix prefix".to_string(),
+        });
+        return Some((TokenKind::Integer(&src[start..end]), end));
+    }
+
+    Some(finish_number(iter, src, start, end, false, errors))
 }
 
 /// Shared tail for every numeric literal: consume an optional `u32`/`f64`/…
