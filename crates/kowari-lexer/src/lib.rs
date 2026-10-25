@@ -312,6 +312,7 @@ pub fn lex(src: &'_ str) -> Result<Vec<Token<'_>>, Vec<Diag>> {
             ']' => Some((TokenKind::RSquareBracket, start + c.len_utf8())),
             '~' => Some((TokenKind::Tilde, start + c.len_utf8())),
             '@' => Some((TokenKind::AtSign, start + c.len_utf8())),
+            ';' => Some((TokenKind::Semicolon, start + c.len_utf8())),
             '.' => {
                 if try_consume(&mut iter, '.') {
                     if try_consume(&mut iter, '=') {
@@ -1659,5 +1660,15 @@ mod tests {
         // the span was non-empty (it contained the `_`).
         let diags = lex("0x_").unwrap_err();
         assert_eq!(diags[0].code, ErrorCode::RadixWithoutDigits.into());
+    }
+
+    #[test]
+    fn unterminated_char_on_line_stops_at_newline() {
+        // `'a` followed by more source: the recovery loop must stop at the
+        // newline, not swallow the rest of the file looking for a quote.
+        let diags = lex("'a\nlet x = 1;").unwrap_err();
+        assert_eq!(diags.len(), 1, "got: {diags:?}");
+        assert_eq!(diags[0].code, ErrorCode::UnterminatedChar.into());
+        assert_eq!(diags[0].span, Span { start: 0, end: 2 });
     }
 }
