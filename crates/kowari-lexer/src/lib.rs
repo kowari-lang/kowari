@@ -190,6 +190,7 @@ pub fn lex(src: &'_ str) -> Result<Vec<Token<'_>>, Vec<Diag>> {
             '~' => Some((TokenKind::Tilde, start + c.len_utf8())),
             '@' => Some((TokenKind::AtSign, start + c.len_utf8())),
             ';' => Some((TokenKind::Semicolon, start + c.len_utf8())),
+            ',' => Some((TokenKind::Comma, start + c.len_utf8())),
             '#' => Some((TokenKind::HashTag, start + 1)),
             '.' => {
                 if try_consume(&mut iter, '.') {

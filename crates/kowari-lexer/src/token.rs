@@ -35,6 +35,7 @@ pub enum TokenKind<'src> {
     Dot,            // .
     QuestionMark,   // ?
     Tilde,          // ~
+    Comma,          // ,
 
     // Multi-Operators
     LShift,             // <<
@@ -177,6 +178,7 @@ impl fmt::Display for TokenKind<'_> {
             TokenKind::Dot => f.write_str("Dot"),
             TokenKind::QuestionMark => f.write_str("QuestionMark"),
             TokenKind::Tilde => f.write_str("Tilde"),
+            TokenKind::Comma => f.write_str("Comma"),
             TokenKind::LShift => f.write_str("LShift"),
             TokenKind::RShift => f.write_str("RShift"),
             TokenKind::LShiftEquals => f.write_str("LShiftEquals"),
