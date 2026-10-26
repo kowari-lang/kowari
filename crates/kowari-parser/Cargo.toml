@@ -8,7 +8,7 @@ repository.workspace = true
 rust-version.workspace = true
 
 [dependencies]
-kowari-ast.workspace         = true
+kowari-ast.workspace = true
 kowari-diagnostics.workspace = true
-kowari-lexer.workspace       = true
-chumsky.workspace            = true
+kowari-lexer.workspace = true
+chumsky.workspace = true

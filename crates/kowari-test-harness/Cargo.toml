@@ -14,7 +14,3 @@ thiserror.workspace = true
 [dev-dependencies]
 kowari-lexer = { path = "../kowari-lexer" }
 kowari-parser = { path = "../kowari-parser" }
-
-[[test]]
-name = "golden"
-path = "tests/golden.rs"

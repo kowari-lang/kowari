@@ -1,7 +1,7 @@
 //! Shared AST type definitions (data only).
 
-mod item;
 mod expr;
+mod item;
 mod literal;
 mod pat;
 mod stmt;
