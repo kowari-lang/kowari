@@ -6,15 +6,19 @@ use crate::DiagCode;
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum ErrorCode {
     // --- Lexer ---
-    UnexpectedToken,     // E0001
-    UnterminatedString,  // E0002
-    UnterminatedChar,    // E0003
-    EmptyChar,           // E0004
-    MultiChar,           // E0005
-    BadNumericSeparator, // E0006
-    RadixWithoutDigits,  // E0007
+    UnexpectedToken,          // E0001
+    UnterminatedString,       // E0002
+    UnterminatedChar,         // E0003
+    EmptyChar,                // E0004
+    MultiChar,                // E0005
+    BadNumericSeparator,      // E0006
+    RadixWithoutDigits,       // E0007
     UnterminatedBlockComment, // E0008
-                         // --- add parser / typeck / borrow-check codes as they land ---
+    ExpectedToken,            // E0009  "expected `X`, found `Y`"
+    ExpectedIdent,            // E0010  "expected an identifier, found `Y`"
+    UnexpectedEof,            // E0011  "unexpected end of input; expected `X`"
+    UnexpectedItem,           // E0012  "expected an item, found `Y`"
+                              // --- add parser / typeck / borrow-check codes as they land ---
 }
 
 impl ErrorCode {
@@ -30,6 +34,10 @@ impl ErrorCode {
             Self::BadNumericSeparator => "E0006",
             Self::RadixWithoutDigits => "E0007",
             Self::UnterminatedBlockComment => "E0008",
+            Self::ExpectedToken => "E0009",
+            Self::ExpectedIdent => "E0010",
+            Self::UnexpectedEof => "E0011",
+            Self::UnexpectedItem => "E0012",
         }
     }
 
@@ -51,9 +59,15 @@ impl ErrorCode {
             Self::RadixWithoutDigits => {
                 "A radix prefix (`0x`, `0b`, `0o`) was not followed by any digits."
             }
+
             Self::UnterminatedBlockComment => {
                 "A block comment was opened with `/*` but never closed with `*/`."
             }
+
+            Self::ExpectedToken => "expected `X`, found `Y`",
+            Self::ExpectedIdent => "expected an identifier, found `Y`",
+            Self::UnexpectedEof => "unexpected end of input; expected `X`",
+            Self::UnexpectedItem => "expected an item, found `Y`",
         }
     }
 

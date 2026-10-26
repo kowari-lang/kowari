@@ -1,4 +1,4 @@
-use crate::expr::Block;
+use crate::stmt::Stmt;
 use crate::ty::Type;
 use kowari_diagnostics::Span;
 
@@ -27,5 +27,11 @@ pub struct Param<'src> {
 #[derive(Debug, Clone)]
 pub struct SourceFile<'src> {
     pub items: Vec<Item<'src>>,
+    pub span: Span,
+}
+
+#[derive(Debug, Clone)]
+pub struct Block<'src> {
+    pub stmts: Vec<Stmt<'src>>, // may be an empty stub for now
     pub span: Span,
 }

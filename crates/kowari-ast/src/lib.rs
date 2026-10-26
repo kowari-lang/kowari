@@ -1,11 +1,11 @@
 //! Shared AST type definitions (data only).
 
-mod expr;
+pub mod expr;
 pub mod item;
-mod literal;
-mod pat;
-mod stmt;
-mod ty;
+pub mod literal;
+pub mod pat;
+pub mod stmt;
+pub mod ty;
 
 #[derive(Debug)]
 pub struct Ast {
