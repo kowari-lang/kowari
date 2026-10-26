@@ -257,6 +257,8 @@ name = "kowari-test-harness"
 version = "0.0.0"
 dependencies = [
  "kowari-driver",
+ "kowari-lexer",
+ "kowari-parser",
  "thiserror",
 ]
 

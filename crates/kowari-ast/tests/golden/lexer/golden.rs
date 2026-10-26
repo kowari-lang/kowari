@@ -73,18 +73,28 @@ fn regenerate(dir: &Path) {
 }
 
 #[test]
-fn golden_pass() {
-    run_dir(&fixture_root().join("pass"));
-}
-
-#[test]
-fn golden_fail() {
-    run_dir(&fixture_root().join("fail"));
-}
-
-#[test]
 #[ignore = "regenerates .expected files; run with: cargo test -- --ignored"]
 fn update_golden() {
     regenerate(&fixture_root().join("pass"));
     regenerate(&fixture_root().join("fail"));
+}
+
+fn render_lex_error(err: &impl std::fmt::Debug) -> String {
+    format!("{err:#?}")
+}
+
+#[test]
+fn golden_pass() {
+    run_dir(&golden_dir("lexer/pass"), |src| {
+        let tokens = kowari_lexer::lex(src).expect("expected lex success");
+        render_tokens(&tokens)
+    });
+}
+
+#[test]
+fn golden_fail() {
+    run_dir(&golden_dir("lexer/fail"), |src| {
+        let err = kowari_lexer::lex(src).expect_err("expected lex failure");
+        render_lex_error(&err)
+    });
 }

@@ -10,3 +10,7 @@ rust-version.workspace = true
 [dependencies]
 kowari-driver.workspace = true
 thiserror.workspace = true
+
+[dev-dependencies]
+kowari-lexer = { path = "../kowari-lexer" }
+kowari-parser = { path = "../kowari-parser" }
