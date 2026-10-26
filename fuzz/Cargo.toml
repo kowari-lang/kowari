@@ -1,0 +1,27 @@
+[package]
+name = "kowari-fuzz"
+version = "0.0.0"
+publish = false
+edition = "2021"
+
+[package.metadata]
+cargo-fuzz = true
+
+# This is the key line for an independent workspace.
+[workspace]
+
+[dependencies]
+libfuzzer-sys = "0.4"
+
+# Adjust this path to your actual lexer crate.
+# If your lexer is in a crate named `kowari-lexer` at `crates/lexer`,
+# it should look like this:
+[dependencies.kowari-lexer]
+path = "../crates/kowari-lexer"
+
+[[bin]]
+name = "lex"
+path = "fuzz_targets/lex.rs"
+test = false
+doc = false
+bench = false

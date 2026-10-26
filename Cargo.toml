@@ -2,6 +2,7 @@
 
 [workspace]
 resolver = "3"
+exclude = ["fuzz"]   # optional but defensive
 members = [
     "crates/kowari-ast",
     "crates/kowari-diagnostics",
