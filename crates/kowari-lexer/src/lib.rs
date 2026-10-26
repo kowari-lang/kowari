@@ -1,4 +1,5 @@
 //! Lexer: source text → tokens.
+#[cfg(test)]
 mod tests;
 pub mod token;
 

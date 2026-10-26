@@ -1,8 +1,5 @@
-#[cfg(test)]
 use crate::lex;
-#[cfg(test)]
 use crate::token::TokenKind;
-#[cfg(test)]
 use kowari_diagnostics::{Diag, ErrorCode, Span};
 
 #[test]

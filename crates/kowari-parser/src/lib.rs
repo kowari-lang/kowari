@@ -1,4 +1,5 @@
 mod errors;
+#[cfg(test)]
 mod tests;
 
 use crate::errors::ParseError;
