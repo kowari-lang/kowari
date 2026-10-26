@@ -11,6 +11,9 @@ pub enum ParseError<'src> {
         expected: TokenKind<'src>,
         span: Span,
     },
+    UnclosedBlock {
+        span: Span,
+    },
 }
 
 impl<'src> From<ParseError<'src>> for Diag {
@@ -30,6 +33,11 @@ impl<'src> From<ParseError<'src>> for Diag {
                 code: DiagCode::from(ErrorCode::UnexpectedEof),
                 span,
                 message: format!("unexpected end of input; expected `{expected:?}`"),
+            },
+            UnclosedBlock { span } => Diag {
+                code: DiagCode::from(ErrorCode::UnterminatedBlock),
+                span,
+                message: "Unclosed block, expected a closing '}'".to_string(),
             },
         }
     }

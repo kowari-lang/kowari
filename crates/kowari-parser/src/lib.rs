@@ -3,8 +3,9 @@ mod errors;
 mod tests;
 
 use crate::errors::ParseError;
-use kowari_ast::item::Function;
 use kowari_ast::item::{Block, Item, SourceFile};
+use kowari_ast::item::{Function, Param};
+use kowari_ast::ty::Type;
 use kowari_diagnostics::{Diag, Span};
 use kowari_lexer::{Token, TokenKind};
 
@@ -68,16 +69,21 @@ impl<'src> Parser<'src> {
         Span::new(end, end)
     }
     fn parse_fn_item(&mut self) -> Result<Function<'src>, ParseError<'src>> {
-        let start = self.expect(TokenKind::Function)?.start; // expect returns Span
+        let start = self.expect(TokenKind::Function)?.start;
         let name = self.expect_ident()?;
-        self.expect(TokenKind::LParen)?;
-        self.expect(TokenKind::RParen)?;
+        let params = self.parse_param_list()?;
+        let ret = if matches!(self.peek().map(|t| t.kind), Some(TokenKind::SmallArrow)) {
+            self.advance();
+            Some(self.parse_type()?)
+        } else {
+            None
+        };
         let body = self.parse_block()?;
         let span = Span::new(start, body.span.end);
         Ok(Function {
             name,
-            params: Vec::new(), // no params yet
-            ret: None,          // no return type yet
+            params,
+            ret,
             body,
             span,
         })
@@ -117,8 +123,32 @@ impl<'src> Parser<'src> {
 
     fn parse_block(&mut self) -> Result<Block<'src>, ParseError<'src>> {
         let start = self.expect(TokenKind::LBrace)?.start;
+
         // TODO(step 3): loop { parse_stmt() } until RBrace
-        let end = self.expect(TokenKind::RBrace)?.end;
+        let mut depth = 1u32;
+        while depth > 0 {
+            match self.advance().map(|t| t.kind) {
+                Some(TokenKind::LBrace) => depth += 1,
+                Some(TokenKind::RBrace) => {
+                    depth -= 1;
+                    if depth == 0 {
+                        let end = self.tokens[self.pos - 1].span.end;
+                        return Ok(Block {
+                            stmts: Vec::new(),
+                            span: Span::new(start, end),
+                        });
+                    }
+                }
+                Some(TokenKind::Eof) | None => {
+                    return Err(ParseError::UnclosedBlock {
+                        span: self.eof_span(),
+                    });
+                }
+                _ => {}
+            }
+        }
+
+        let end = self.tokens[self.pos - 1].span.end;
         Ok(Block {
             stmts: Vec::new(),
             span: Span::new(start, end),
@@ -135,6 +165,72 @@ impl<'src> Parser<'src> {
                     span: token.span,
                 }),
             },
+            None => Err(ParseError::UnexpectedEof {
+                expected: TokenKind::Identifier(""),
+                span: self.eof_span(),
+            }),
+        }
+    }
+
+    fn parse_param_list(&mut self) -> Result<Vec<Param<'src>>, ParseError<'src>> {
+        self.expect(TokenKind::LParen)?;
+        let mut params = Vec::new();
+        if matches!(self.peek().map(|t| t.kind), Some(TokenKind::RParen)) {
+            self.advance();
+            return Ok(params);
+        }
+        loop {
+            params.push(self.parse_param()?);
+            match self.advance().map(|t| t.kind) {
+                Some(TokenKind::Comma) => continue,
+                Some(TokenKind::RParen) => break,
+                Some(got) => {
+                    let span = self.tokens[self.pos - 1].span;
+                    return Err(ParseError::UnexpectedToken {
+                        expected: TokenKind::Comma,
+                        got,
+                        span,
+                    });
+                }
+                None => {
+                    return Err(ParseError::UnexpectedEof {
+                        expected: TokenKind::Comma,
+                        span: self.eof_span(),
+                    });
+                }
+            }
+        }
+        Ok(params)
+    }
+
+    fn parse_param(&mut self) -> Result<Param<'src>, ParseError<'src>> {
+        let start = self.peek().map(|t| t.span.start).unwrap_or(0);
+        let name = self.expect_ident()?;
+        // Only if the fixture has typed params:
+        let ty = if matches!(self.peek().map(|t| t.kind), Some(TokenKind::Colon)) {
+            self.advance();
+            Some(self.parse_type()?)
+        } else {
+            None
+        };
+        let end = self.tokens[self.pos - 1].span.end;
+        Ok(Param {
+            name,
+            ty,
+            span: Span::new(start, end),
+        })
+    }
+
+    fn parse_type(&mut self) -> Result<Type<'src>, ParseError<'src>> {
+        // Minimal: a bare identifier as a type name (e.g. `i32`, `Foo`)
+        let span = self.peek().map(|t| t.span).unwrap_or_default();
+        match self.advance().map(|t| t.kind) {
+            Some(TokenKind::Identifier(name)) => Ok(Type::Name { name, span }),
+            Some(got) => Err(ParseError::UnexpectedToken {
+                expected: TokenKind::Identifier(""),
+                got,
+                span,
+            }),
             None => Err(ParseError::UnexpectedEof {
                 expected: TokenKind::Identifier(""),
                 span: self.eof_span(),
