@@ -1,5 +1,7 @@
+use kowari_lexer::{dump_tokens, lex};
 use std::fs;
 use std::path::{Path, PathBuf};
+use kowari_test_harness::golden_dir;
 
 /// Canonicalize text so editor/git line-ending changes can't fail the diff.
 /// `dump_tokens` always emits LF and always ends with a newline, so match that.
@@ -12,7 +14,17 @@ fn normalize(s: &str) -> String {
 }
 
 fn render(src: &str) -> String {
-    format!("{ast:#?}")
+    match lex(src) {
+        Ok(_) => dump_tokens(src).unwrap(),
+        Err(diags) => {
+            let mut out = String::new();
+            for d in diags {
+                use std::fmt::Write;
+                writeln!(out, "{d}").unwrap();
+            }
+            out
+        }
+    }
 }
 
 fn normalize_source(s: &str) -> String {
@@ -20,7 +32,7 @@ fn normalize_source(s: &str) -> String {
 }
 
 fn fixture_root() -> PathBuf {
-    Path::new(env!("CARGO_MANIFEST_DIR")).join("..")
+    Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/golden")
 }
 
 fn run_dir(dir: &Path) {
@@ -61,31 +73,29 @@ fn regenerate(dir: &Path) {
     }
 }
 
-fn check(name: &str, actual: &str) {
-    let path = Path::new("").join(format!("{name}.expected.ast"));
-    if std::env::var_os("UPDATE_EXPECT").is_some() {
-        std::fs::create_dir_all(path.parent().unwrap()).ok();
-        std::fs::write(&path, actual).unwrap();
-        return;
-    }
-    let expected = std::fs::read_to_string(&path)
-        .unwrap_or_else(|_| panic!("missing {path:?}; rerun with UPDATE_EXPECT=1"));
-    assert_eq!(actual, expected, "AST golden mismatch for {name}");
-}
-
-#[test]
-fn golden_pass() {
-    run_dir(&fixture_root().join("pass"));
-}
-
-#[test]
-fn golden_fail() {
-    run_dir(&fixture_root().join("fail"));
-}
-
 #[test]
 #[ignore = "regenerates .expected files; run with: cargo test -- --ignored"]
 fn update_golden() {
     regenerate(&fixture_root().join("pass"));
     regenerate(&fixture_root().join("fail"));
+}
+
+fn render_lex_error(err: &impl std::fmt::Debug) -> String {
+    format!("{err:#?}")
+}
+
+#[test]
+fn golden_pass() {
+    run_dir(&golden_dir("lexer/pass"), |src| {
+        let tokens = kowari_lexer::lex(src).expect("expected lex success");
+        render_tokens(&tokens)
+    });
+}
+
+#[test]
+fn golden_fail() {
+    run_dir(&golden_dir("lexer/fail"), |src| {
+        let err = kowari_lexer::lex(src).expect_err("expected lex failure");
+        render_lex_error(&err)
+    });
 }

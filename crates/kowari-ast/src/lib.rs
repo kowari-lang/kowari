@@ -7,6 +7,7 @@ mod pat;
 mod stmt;
 mod ty;
 
+#[derive(Debug)]
 pub struct Ast {
     // TODO: fill in during M1a
 }
