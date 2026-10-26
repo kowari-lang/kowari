@@ -1,9 +1,10 @@
 use kowari_ast::item::SourceFile;
-use kowari_diagnostics::{Diag, Span};use kowari_lexer::Token;
+use kowari_diagnostics::{Diag, Span};
+use kowari_lexer::Token;
 
 pub fn parse<'src>(_tokens: &[Token]) -> Result<SourceFile<'src>, Vec<Diag>> {
     Ok(SourceFile {
         items: Vec::new(),
-        span: Span { start: 0, end: 0 },
+        span: Span::default(),
     })
 }

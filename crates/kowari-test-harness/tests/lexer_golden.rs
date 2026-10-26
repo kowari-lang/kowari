@@ -54,10 +54,6 @@ fn update_golden() {
     regenerate(&fixture_root().join("fail"));
 }
 
-fn render_lex_error(err: &impl std::fmt::Debug) -> String {
-    format!("{err:#?}")
-}
-
 #[test]
 fn golden_pass() {
     run_dir(&golden_dir("lexer/pass"), |src| {
