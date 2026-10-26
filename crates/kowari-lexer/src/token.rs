@@ -26,6 +26,7 @@ pub enum TokenKind<'src> {
     Ampersand,      // &
     Caret,          // ^
     HashTag,        // #
+    Underscore,     // _
     AtSign,         // @
     GreaterThan,    // >
     LessThan,       // <
@@ -169,6 +170,7 @@ impl fmt::Display for TokenKind<'_> {
             TokenKind::Ampersand => f.write_str("Ampersand"),
             TokenKind::Caret => f.write_str("Caret"),
             TokenKind::HashTag => f.write_str("HashTag"),
+            TokenKind::Underscore => f.write_str("Underscore"),
             TokenKind::AtSign => f.write_str("AtSign"),
             TokenKind::GreaterThan => f.write_str("GreaterThan"),
             TokenKind::LessThan => f.write_str("LessThan"),

@@ -344,7 +344,11 @@ pub fn lex(src: &'_ str) -> Result<Vec<Token<'_>>, Vec<Diag>> {
 
                 let end = iter.peek().map(|(i, _)| *i).unwrap_or(src.len());
                 let text = &src[start..end];
-                let kind = check_for_keyword(text);
+                let kind = if text == "_" {
+                    TokenKind::Underscore
+                } else {
+                    check_for_keyword(text)
+                };
                 Some((kind, end))
             }
             _ => {

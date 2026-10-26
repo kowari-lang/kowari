@@ -383,14 +383,18 @@ fn integer_separators_are_preserved() {
 }
 
 #[test]
-fn underscore_leading_identifiers_are_not_integers() {
-    // A leading '_' must produce an Identifier, not an Integer.
-    let kinds: Vec<_> = lex("_foo _ _1").unwrap().iter().map(|t| t.kind).collect();
+fn bare_underscore_is_a_distinct_token() {
+    let kinds: Vec<_> = lex("_ _foo __ _1")
+        .unwrap()
+        .iter()
+        .map(|t| t.kind)
+        .collect();
     assert_eq!(
         kinds,
         vec![
+            TokenKind::Underscore,
             TokenKind::Identifier("_foo"),
-            TokenKind::Identifier("_"),
+            TokenKind::Identifier("__"),
             TokenKind::Identifier("_1"),
             TokenKind::Eof,
         ]
