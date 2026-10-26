@@ -1,7 +1,10 @@
 //! Diagnostic codes, spans, and rendering.
 
 mod codes;
+
 pub use codes::ErrorCode;
+use std::fmt;
+use std::fmt::Formatter;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct Span {
@@ -17,4 +20,14 @@ pub struct Diag {
     pub code: DiagCode,
     pub span: Span,
     pub message: String,
+}
+
+impl fmt::Display for Diag {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        write!(
+            f,
+            "{:?} @ {}..{}: {}",
+            self.code, self.span.start, self.span.end, self.message
+        )
+    }
 }

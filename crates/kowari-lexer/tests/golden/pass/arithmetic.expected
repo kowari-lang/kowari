@@ -1,0 +1,6 @@
+Integer("1") @ 0..1
+Plus @ 2..3
+Integer("2") @ 4..5
+Star @ 6..7
+Integer("3") @ 8..9
+Eof @ 9..9

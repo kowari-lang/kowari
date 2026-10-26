@@ -1,0 +1,10 @@
+fn main() -> i32 { 0 }
+Function @ 0..1
+Identifier('main') @ 0..1
+LeftParen @ 0..1
+RightParen @ 0..1
+SmallArrow @ 0..1
+ @ 0..1
+LeftCurlyBrace @ 0..1
+Integer(0) @ 0..1
+RightCurlyBrace @ 0..1
