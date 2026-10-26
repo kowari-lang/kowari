@@ -18,6 +18,7 @@
       <sourceFolder url="file://$MODULE_DIR$/tests" isTestSource="true" />
       <sourceFolder url="file://$MODULE_DIR$/fuzz/src" isTestSource="false" />
       <sourceFolder url="file://$MODULE_DIR$/crates/kowari-lexer/tests" isTestSource="true" />
+      <sourceFolder url="file://$MODULE_DIR$/crates/kowari-test-harness/tests" isTestSource="true" />
       <excludeFolder url="file://$MODULE_DIR$/target" />
     </content>
     <orderEntry type="inheritedJdk" />

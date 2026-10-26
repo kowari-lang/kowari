@@ -1,2 +1,4 @@
-*.kowari    text eol=lf
-*.expected  text eol=lf
+* text=auto eol=lf
+
+*.kowari   text eol=lf
+*.expected text eol=lf

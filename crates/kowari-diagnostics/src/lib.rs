@@ -6,7 +6,7 @@ pub use codes::ErrorCode;
 use std::fmt;
 use std::fmt::Formatter;
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub struct Span {
     pub start: usize,
     pub end: usize,
@@ -22,6 +22,16 @@ pub struct Diag {
     pub message: String,
 }
 
+impl Span {
+    pub fn length(&self) -> usize {
+        self.end - self.start
+    }
+
+    pub fn new(start: usize, end: usize) -> Span {
+        Span { start, end }
+    }
+}
+
 impl fmt::Display for Diag {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         write!(
@@ -29,5 +39,11 @@ impl fmt::Display for Diag {
             "{:?} @ {}..{}: {}",
             self.code, self.span.start, self.span.end, self.message
         )
+    }
+}
+
+impl fmt::Display for Span {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        write!(f, "{}..{}", self.start, self.end)
     }
 }

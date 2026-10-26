@@ -1,9 +1,10 @@
-//! Parser: tokens → AST.
+use kowari_ast::item::SourceFile;
+use kowari_diagnostics::{Diag, Span};
+use kowari_lexer::Token;
 
-use kowari_ast::Ast;
-use kowari_diagnostics::Diag;
-use kowari_lexer::token::Token;
-
-pub fn parse(_tokens: Vec<Token>) -> Result<Ast, Vec<Diag>> {
-    unimplemented!("parser not implemented yet")
+pub fn parse<'src>(_tokens: &[Token]) -> Result<SourceFile<'src>, Vec<Diag>> {
+    Ok(SourceFile {
+        items: Vec::new(),
+        span: Span::default(),
+    })
 }
