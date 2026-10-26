@@ -1700,4 +1700,212 @@ mod tests {
         assert_eq!(diags[0].code, ErrorCode::UnterminatedChar.into());
         assert_eq!(diags[0].span, Span { start: 0, end: 2 });
     }
+
+    // ----- Additional coverage (M0 review) -------------------------------------
+
+    #[test]
+    fn empty_input_produces_only_eof() {
+        let tokens = lex("").unwrap();
+        assert_eq!(tokens.len(), 1);
+        assert_eq!(tokens[0].kind, TokenKind::Eof);
+        assert_eq!(tokens[0].span, Span { start: 0, end: 0 });
+    }
+
+    #[test]
+    fn whitespace_only_input_produces_only_eof() {
+        let tokens = lex("   ").unwrap();
+        assert_eq!(tokens.len(), 1);
+        assert_eq!(tokens[0].kind, TokenKind::Eof);
+        assert_eq!(tokens[0].span, Span { start: 3, end: 3 });
+    }
+
+    #[test]
+    fn crlf_is_treated_as_whitespace() {
+        let kinds: Vec<_> = lex("fn\r\nmain").unwrap().iter().map(|t| t.kind).collect();
+        assert_eq!(
+            kinds,
+            vec![
+                TokenKind::Function,
+                TokenKind::Identifier("main"),
+                TokenKind::Eof,
+            ]
+        );
+    }
+
+    #[test]
+    fn unicode_identifiers_are_accepted() {
+        // Provisional M0 behaviour: identifiers use is_alphabetic() /
+        // is_alphanumeric(), so Unicode letters are accepted. If the spec
+        // later restricts identifiers, update this test to expect diags.
+        let kinds: Vec<_> = lex("café λ _x1").unwrap().iter().map(|t| t.kind).collect();
+        assert_eq!(
+            kinds,
+            vec![
+                TokenKind::Identifier("café"),
+                TokenKind::Identifier("λ"),
+                TokenKind::Identifier("_x1"),
+                TokenKind::Eof,
+            ]
+        );
+    }
+
+    #[test]
+    fn string_with_escaped_quote() {
+        // Source text: "a\"b"  — content must include the escaped quote.
+        let tokens = lex(r#""a\"b""#).unwrap();
+        assert_eq!(tokens[0].kind, TokenKind::String(r#"a\"b"#));
+        assert_eq!(tokens[0].span, Span { start: 0, end: 6 });
+    }
+
+    #[test]
+    fn string_with_actual_newline_is_accepted() {
+        // Provisional M0 behaviour: escapes are not validated, so a raw
+        // newline inside a string is currently accepted. Pin it so any
+        // future tightening is deliberate.
+        let src = "\"a\nb\"";
+        let tokens = lex(src).unwrap();
+        assert_eq!(tokens[0].kind, TokenKind::String("a\nb"));
+        assert_eq!(tokens[0].span, Span { start: 0, end: 5 });
+    }
+
+    #[test]
+    fn unterminated_string_span_covers_input() {
+        let diags = lex("\"abc").unwrap_err();
+        assert_eq!(diags.len(), 1);
+        assert_eq!(diags[0].code, ErrorCode::UnterminatedString.into());
+        assert_eq!(diags[0].span, Span { start: 0, end: 4 });
+    }
+
+    #[test]
+    fn bare_double_quote_at_eof_is_an_error() {
+        let diags = lex("\"").unwrap_err();
+        assert_eq!(diags.len(), 1);
+        assert_eq!(diags[0].code, ErrorCode::UnterminatedString.into());
+        assert_eq!(diags[0].span, Span { start: 0, end: 1 });
+    }
+
+    #[test]
+    fn multi_char_at_eof_is_unterminated() {
+        // `'ab` — no closing quote, no newline; recovery hits EOF.
+        let diags = lex("'ab").unwrap_err();
+        assert_eq!(diags.len(), 1);
+        assert_eq!(diags[0].code, ErrorCode::UnterminatedChar.into());
+        assert_eq!(diags[0].span, Span { start: 0, end: 3 });
+    }
+
+    #[test]
+    fn exponent_with_underscore() {
+        let kinds: Vec<_> = lex("1e1_0").unwrap().iter().map(|t| t.kind).collect();
+        assert_eq!(kinds, vec![TokenKind::Float("1e1_0"), TokenKind::Eof]);
+    }
+
+    #[test]
+    fn double_minus_lexes_as_two_tokens() {
+        // The spec has no `--` token; document that it is two Minus tokens.
+        let kinds: Vec<_> = lex("--").unwrap().iter().map(|t| t.kind).collect();
+        assert_eq!(
+            kinds,
+            vec![TokenKind::Minus, TokenKind::Minus, TokenKind::Eof]
+        );
+    }
+
+    #[test]
+    fn triple_ampersand_is_double_and_then_single() {
+        let kinds: Vec<_> = lex("&&&").unwrap().iter().map(|t| t.kind).collect();
+        assert_eq!(
+            kinds,
+            vec![TokenKind::DoubleAnd, TokenKind::Ampersand, TokenKind::Eof,]
+        );
+    }
+
+    #[test]
+    fn double_question_mark_and_trailing_question() {
+        let kinds: Vec<_> = lex("?? ???").unwrap().iter().map(|t| t.kind).collect();
+        assert_eq!(
+            kinds,
+            vec![
+                TokenKind::DoubleQuestionMark,
+                TokenKind::DoubleQuestionMark,
+                TokenKind::QuestionMark,
+                TokenKind::Eof,
+            ]
+        );
+    }
+
+    #[test]
+    fn range_inclusive_requires_adjacency() {
+        let kinds: Vec<_> = lex("..= .. =").unwrap().iter().map(|t| t.kind).collect();
+        assert_eq!(
+            kinds,
+            vec![
+                TokenKind::RangeInclusive,
+                TokenKind::DoubleDot,
+                TokenKind::Equals,
+                TokenKind::Eof,
+            ]
+        );
+    }
+
+    #[test]
+    fn block_comment_slash_star_slash_is_unterminated() {
+        // `/*/` — the initial `/*` opens a comment; the trailing `/` is not
+        // a closing `*/`, so this is unterminated.
+        let diags = lex("/*/").unwrap_err();
+        assert_eq!(diags.len(), 1);
+        assert_eq!(diags[0].code, ErrorCode::UnterminatedBlockComment.into());
+        assert_eq!(diags[0].span, Span { start: 0, end: 3 });
+    }
+
+    #[test]
+    fn block_comment_star_star_slash_is_empty() {
+        // `/**/` — an empty block comment; no off-by-one depth error.
+        let kinds: Vec<_> = lex("/**/ 1").unwrap().iter().map(|t| t.kind).collect();
+        assert_eq!(kinds, vec![TokenKind::Integer("1"), TokenKind::Eof]);
+    }
+
+    #[test]
+    fn multiple_errors_on_one_line() {
+        // Two unexpected tokens with a valid `+` between them; the lexer
+        // must report both rather than stopping at the first.
+        let diags = lex("♥ + ♥").unwrap_err();
+        assert_eq!(diags.len(), 2, "got: {diags:?}");
+        assert_eq!(diags[0].code, ErrorCode::UnexpectedToken.into());
+        assert_eq!(diags[1].code, ErrorCode::UnexpectedToken.into());
+        // ♥ is 3 bytes; the second one starts after "♥ + " (6 bytes).
+        assert_eq!(diags[0].span, Span { start: 0, end: 3 });
+        assert_eq!(diags[1].span, Span { start: 6, end: 9 });
+    }
+
+    #[test]
+    fn single_char_operators_at_eof() {
+        for (src, expected_kind) in [
+            ("+", TokenKind::Plus),
+            ("-", TokenKind::Minus),
+            ("*", TokenKind::Star),
+            ("/", TokenKind::Slash),
+            ("%", TokenKind::Percent),
+            ("<", TokenKind::LessThan),
+            (">", TokenKind::GreaterThan),
+            ("=", TokenKind::Equals),
+            ("!", TokenKind::Exclamation),
+            ("&", TokenKind::Ampersand),
+            ("|", TokenKind::Pipe),
+            (":", TokenKind::Colon),
+            ("^", TokenKind::Caret),
+            ("?", TokenKind::QuestionMark),
+            (".", TokenKind::Dot),
+        ] {
+            let tokens = lex(src).unwrap();
+            assert_eq!(tokens[0].kind, expected_kind, "input: {src:?}");
+            assert_eq!(
+                tokens[0].span,
+                Span {
+                    start: 0,
+                    end: src.len()
+                },
+                "input: {src:?}"
+            );
+            assert_eq!(tokens[1].kind, TokenKind::Eof, "input: {src:?}");
+        }
+    }
 }
