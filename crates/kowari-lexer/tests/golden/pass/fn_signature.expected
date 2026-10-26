@@ -1,10 +1,10 @@
-fn main() -> i32 { 0 }
-Function @ 0..1
-Identifier('main') @ 0..1
-LeftParen @ 0..1
-RightParen @ 0..1
-SmallArrow @ 0..1
- @ 0..1
-LeftCurlyBrace @ 0..1
-Integer(0) @ 0..1
-RightCurlyBrace @ 0..1
+Function @ 0..2
+Identifier("main") @ 3..7
+LParen @ 7..8
+RParen @ 8..9
+SmallArrow @ 10..12
+Identifier("i32") @ 13..16
+LBrace @ 17..18
+Integer("0") @ 19..20
+RBrace @ 21..22
+Eof @ 22..22

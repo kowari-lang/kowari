@@ -1,0 +1,10 @@
+Integer("250") @ 0..3
+PlusWrapping @ 4..6
+Integer("10") @ 7..9
+Integer("250") @ 10..13
+PlusChecked @ 14..16
+Integer("10") @ 17..19
+Integer("250") @ 20..23
+PlusSaturating @ 24..26
+Integer("10") @ 27..29
+Eof @ 29..29

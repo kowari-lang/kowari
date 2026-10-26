@@ -10,3 +10,7 @@ rust-version.workspace = true
 [dependencies]
 kowari-diagnostics.workspace = true
 logos.workspace = true
+
+[[test]]
+name = "golden"
+path = "tests/golden.rs"

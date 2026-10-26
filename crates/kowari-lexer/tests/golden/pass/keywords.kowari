@@ -1,0 +1,51 @@
+// Keywords — every entry in check_for_keyword() must appear below.
+// Grouped semantically; grouping has no effect on lexing.
+
+// Declarations
+fn
+struct
+enum
+union
+trait
+impl
+type
+dyn
+mod
+use
+crate
+
+// Bindings
+let
+mut
+const
+static
+
+// Control flow
+if
+else
+match
+for
+while
+loop
+break
+continue
+return
+defer
+errdefer
+
+// Modifiers
+pub
+unsafe
+extern
+
+// Paths and misc
+self
+Self
+in
+range
+where
+as
+
+// Booleans
+true
+false
