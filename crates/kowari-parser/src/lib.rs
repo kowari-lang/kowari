@@ -3,7 +3,8 @@ mod errors;
 mod tests;
 
 use crate::errors::ParseError;
-use kowari_ast::item::{Block, Function, Item, SourceFile};
+use kowari_ast::item::Function;
+use kowari_ast::item::{Block, Item, SourceFile};
 use kowari_diagnostics::{Diag, Span};
 use kowari_lexer::{Token, TokenKind};
 
@@ -66,31 +67,78 @@ impl<'src> Parser<'src> {
         let end = self.tokens.last().map_or(0, |t| t.span.end);
         Span::new(end, end)
     }
-
-    // internal: structured, cheap
     fn parse_fn_item(&mut self) -> Result<Function<'src>, ParseError<'src>> {
-        self.expect(TokenKind::Function)?;
+        let start = self.expect(TokenKind::Function)?.start; // expect returns Span
         let name = self.expect_ident()?;
         self.expect(TokenKind::LParen)?;
         self.expect(TokenKind::RParen)?;
         let body = self.parse_block()?;
-
-        todo!()
+        let span = Span::new(start, body.span.end);
+        Ok(Function {
+            name,
+            params: Vec::new(), // no params yet
+            ret: None,          // no return type yet
+            body,
+            span,
+        })
     }
 
     fn parse_source_file(&mut self) -> Result<SourceFile<'src>, ParseError<'src>> {
-        unimplemented!("step 2: loop {{ items.push(self.parse_item()?) }}")
+        let mut items = Vec::new();
+        let start = self.peek().map(|t| t.span.start).unwrap_or(0);
+        while !matches!(
+            self.peek().map(|token| token.kind),
+            Some(TokenKind::Eof) | None
+        ) {
+            items.push(self.parse_item()?);
+        }
+        let end = self.eof_span().end;
+
+        Ok(SourceFile {
+            items,
+            span: Span::new(start, end),
+        })
     }
 
     fn parse_item(&mut self) -> Result<Item<'src>, ParseError<'src>> {
-        unimplemented!("step 2: dispatch on TokenKind::Fn")
+        match self.peek().map(|t| t.kind) {
+            Some(TokenKind::Function) => self.parse_fn_item().map(Item::Function),
+            Some(other) => Err(ParseError::UnexpectedToken {
+                expected: TokenKind::Function,
+                got: other,
+                span: self.peek().unwrap().span,
+            }),
+            None => Err(ParseError::UnexpectedEof {
+                expected: TokenKind::Function,
+                span: self.eof_span(),
+            }),
+        }
     }
 
     fn parse_block(&mut self) -> Result<Block<'src>, ParseError<'src>> {
-        unimplemented!("step 2: expect LeftBrace, then RightBrace")
+        let start = self.expect(TokenKind::LBrace)?.start;
+        // TODO(step 3): loop { parse_stmt() } until RBrace
+        let end = self.expect(TokenKind::RBrace)?.end;
+        Ok(Block {
+            stmts: Vec::new(),
+            span: Span::new(start, end),
+        })
     }
 
     fn expect_ident(&mut self) -> Result<&'src str, ParseError<'src>> {
-        unimplemented!("step 2: consume TokenKind::Ident")
+        match self.advance() {
+            Some(token) => match token.kind {
+                TokenKind::Identifier(name) => Ok(name),
+                got => Err(ParseError::UnexpectedToken {
+                    expected: TokenKind::Identifier(""),
+                    got,
+                    span: token.span,
+                }),
+            },
+            None => Err(ParseError::UnexpectedEof {
+                expected: TokenKind::Identifier(""),
+                span: self.eof_span(),
+            }),
+        }
     }
 }
