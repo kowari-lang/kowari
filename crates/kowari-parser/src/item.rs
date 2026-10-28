@@ -30,8 +30,7 @@ impl<'src> Parser<'src> {
         let start = self.current_span();
         // consume `fn` token
         self.advance();
-        let name = self.expect_ident()?;
-        let name_span = self.prev_span();
+        let (name, name_span) = self.expect_ident()?;
         let params = self.parse_param_list()?;
         let ret = self.parse_optional_return_type()?;
         let body = self.parse_block()?;
@@ -80,8 +79,7 @@ impl<'src> Parser<'src> {
 
     fn parse_param(&mut self) -> Result<Param<'src>, ParseError<'src>> {
         let start = self.peek().map(|t| t.span.start).unwrap_or(0);
-        let name = self.expect_ident()?;
-        let name_span = self.prev_span();
+        let (name, name_span) = self.expect_ident()?;
         // Only if the fixture has typed params:
         let ty = if matches!(self.peek().map(|t| t.kind), Some(TokenKind::Colon)) {
             self.advance();

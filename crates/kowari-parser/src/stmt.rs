@@ -59,7 +59,7 @@ impl<'src> Parser<'src> {
             false
         };
 
-        let name = self.expect_ident()?;
+        let (name, name_span) = self.expect_ident()?;
         //let pat = Pattern::Identifier(name);
         //let pat_span = start.merge(self.prev_span());
 
@@ -89,6 +89,7 @@ impl<'src> Parser<'src> {
             kind: StmtKind::Let {
                 mutable,
                 name,
+                name_span,
                 ty,
                 init,
             },

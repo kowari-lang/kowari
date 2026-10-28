@@ -28,8 +28,7 @@ impl<'src> Parser<'src> {
             });
         }
 
-        let ident = self.expect_ident()?;
-        let span = self.prev_span();
+        let (ident, span) = self.expect_ident()?;
         Ok(Type {
             kind: TypeKind::Name { name: ident },
             span,

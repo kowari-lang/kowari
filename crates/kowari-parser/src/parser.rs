@@ -96,10 +96,10 @@ impl<'src> Parser<'src> {
         Span::new(end, end)
     }
 
-    pub(crate) fn expect_ident(&mut self) -> Result<&'src str, ParseError<'src>> {
+    pub(crate) fn expect_ident(&mut self) -> Result<(&'src str, Span), ParseError<'src>> {
         match self.advance() {
             Some(token) => match token.kind {
-                TokenKind::Identifier(name) => Ok(name),
+                TokenKind::Identifier(name) => Ok((name, self.prev_span())),
                 found => Err(ParseError::IdentifierExpected {
                     found,
                     span: token.span,

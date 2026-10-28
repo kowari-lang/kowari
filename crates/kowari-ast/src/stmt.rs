@@ -14,6 +14,7 @@ pub enum StmtKind<'src> {
     Let {
         mutable: bool,
         name: &'src str,
+        name_span: Span,
         ty: Option<Type<'src>>,
         init: Option<Expr<'src>>,
     },

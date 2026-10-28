@@ -77,6 +77,10 @@ SourceFile {
                                 kind: Let {
                                     mutable: false,
                                     name: "sum",
+                                    name_span: Span {
+                                        start: 40,
+                                        end: 43,
+                                    },
                                     ty: None,
                                     init: Some(
                                         Expr {
