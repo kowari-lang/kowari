@@ -37,6 +37,47 @@ What works today:
 **You cannot compile a `.kowari` program yet.** The first milestone that
 produces a running binary is M1a.
 
+## Parser Milestone 1a — Implementation Roadmap
+
+M1a is delivered as seven small, self-contained sections. Each section is one
+PR, and each PR has a defined "done" (all its tests green, no regressions).
+Sections are ordered by dependency — earlier sections unblock later ones —
+so start at the top and work down.
+
+| # | Section             | Depends on | Scope                                                                          | Status |
+|---|---------------------|------------|--------------------------------------------------------------------------------|--------|
+| A | Control flow        | —          | `if`/`else`, `if let`, `while`, `loop`, `for`, `..`/`..=`, `break`, `continue` |        |
+| G | Type system         | —          | arrays, tuples, fn types, generic args, lifetimes, raw ptrs'*                  |        |
+| B | Data types          | G          | `struct`, `enum`, `pub`, `Fields` (named / tuple / unit)                       |        |
+| C | Pattern matching    | A, B       | `match`, patterns, `if let`/`let else` (patterns are richer)                   |        |
+| D | Abstraction         | B, G       | `trait`, `impl`, generics, bounds, where-clauses                               |        |
+| F | Unsafe / FFI        | G          | `unsafe` blocks/fns, `*const`/`*mut` types, `extern "C"` blocks                |        |
+| E | Resource management | A          | `resource`, `deinit`, `defer`, `errdefer`                                      |        |
+
+\* Raw pointer *types* land in G; the `unsafe`-block *expression* lands in F.
+G builds the type; F builds the wrapper.
+
+### Working agreement
+
+- One PR per section. Merge before starting the next.
+- Tests first: each section ships with the tests listed in its PR body (happy path + at least one error path + one
+  "never panics on garbage").
+- New diagnostics are added to `ParseError` in the same PR that needs them.
+  Every new variant must have `.code()` and `.span()`, and at least one test
+  asserting the code via `assert_err_code`.
+- No section touches the AST of another section except by *adding* a variant
+  it needs; existing variants are not modified mid-M1a.
+- `cargo test -p kowari-parser` and `cargo clippy -- -D warnings` must be
+  clean for the PR to be mergeable.
+
+### Definition of done for M1a
+
+- Every section above is merged and marked ✅.
+- The `never_panics_on_garbage` test in each section passes.
+- The `Planning.md` §5.1 grammar table is fully covered by parser tests.
+- `docs/internals/parser.md` describes the precedence table and error-recovery
+  strategy (if implemented in this milestone).
+
 ## Lexer notes
 
 The lexer is **hand-written**, not derive-based. It lives in
