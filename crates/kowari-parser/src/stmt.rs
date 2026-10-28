@@ -145,7 +145,7 @@ impl<'src> Parser<'src> {
 
     fn parse_continue_stmt(&mut self) -> Result<Stmt<'src>, ParseError<'src>> {
         let start = self.current_span();
-        // Consume `span` token
+        // Consume `continue` token
         self.advance();
 
         let semi = self.expect(TokenKind::Semicolon)?;
