@@ -17,6 +17,8 @@ impl<'src> Parser<'src> {
         match self.peek().map(|t| t.kind) {
             Some(TokenKind::LetToken) => self.parse_let_statement(),
             Some(TokenKind::ReturnToken) => self.parse_return_statement(),
+            Some(TokenKind::BreakToken) => self.parse_break_stmt(),
+            Some(TokenKind::ContinueToken) => self.parse_continue_stmt(),
             _ => {
                 let expr = self.parse_expression()?;
                 if self.check(TokenKind::Semicolon) {
@@ -120,6 +122,37 @@ impl<'src> Parser<'src> {
         Ok(Stmt {
             kind: StmtKind::Return(value),
             span: start.merge(end),
+        })
+    }
+
+    fn parse_break_stmt(&mut self) -> Result<Stmt<'src>, ParseError<'src>> {
+        let start = self.current_span();
+        // Consume `break` token
+        self.advance();
+
+        let value = if self.can_start_expr() {
+            Some(Box::new(self.parse_expression()?))
+        } else {
+            None
+        };
+
+        let semi = self.expect(TokenKind::Semicolon)?;
+        Ok(Stmt {
+            kind: StmtKind::Break(value),
+            span: start.merge(semi.span),
+        })
+    }
+
+    fn parse_continue_stmt(&mut self) -> Result<Stmt<'src>, ParseError<'src>> {
+        let start = self.current_span();
+        // Consume `span` token
+        self.advance();
+
+        let semi = self.expect(TokenKind::Semicolon)?;
+
+        Ok(Stmt {
+            kind: StmtKind::Continue,
+            span: start.merge(semi.span),
         })
     }
 }

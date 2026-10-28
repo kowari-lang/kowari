@@ -123,7 +123,7 @@ impl<'src> Parser<'src> {
         }
     }
 
-    fn can_start_expr(&self) -> bool {
+    pub(crate) fn can_start_expr(&self) -> bool {
         matches!(
             self.peek_kind(),
             Some(
@@ -141,6 +141,9 @@ impl<'src> Parser<'src> {
                 | TokenKind::Star        // unary *
                 | TokenKind::DoubleDot   // nested range prefix (parse will reject with E0015)
                 | TokenKind::RangeInclusive
+                | TokenKind::IfToken
+                | TokenKind::WhileToken
+                | TokenKind::LoopToken
             )
         )
     }
