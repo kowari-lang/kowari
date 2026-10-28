@@ -338,6 +338,31 @@ impl<'src> Parser<'src> {
         // Consume the if-token
         self.advance();
 
+        if self.check(TokenKind::LetToken) {
+            // Consume `Let` token
+            self.advance();
+            let pattern = self.parse_pattern()?;
+            self.expect(TokenKind::Equals)?;
+            let scrutinee = self.parse_expression()?;
+            let then_branch = self.parse_block()?;
+            let else_branch = self.parse_opt_else()?;
+
+            let end = match &else_branch {
+                Some(expr) => expr.span,
+                None => then_branch.span,
+            };
+
+            return Ok(Expr {
+                span: start.merge(end),
+                kind: ExprKind::IfLet {
+                    pattern,
+                    scrutinee: Box::new(scrutinee),
+                    then_branch,
+                    else_branch,
+                },
+            });
+        }
+
         let condition = self.parse_expression()?;
         let then_branch = self.parse_block()?;
 
@@ -380,6 +405,16 @@ impl<'src> Parser<'src> {
             }),
         }
     }
+
+    fn parse_opt_else(&mut self) -> Result<Option<Box<Expr<'src>>>, ParseError<'src>> {
+        if self.check(TokenKind::ElseToken) {
+            self.advance();
+            Ok(Some(Box::new(self.parse_else_expr()?)))
+        } else {
+            Ok(None)
+        }
+    }
+
     fn parse_while_expr(&mut self) -> Result<Expr<'src>, ParseError<'src>> {
         let start = self.current_span();
         // Consume the 'while' token
