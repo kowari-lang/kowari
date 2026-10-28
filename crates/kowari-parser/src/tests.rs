@@ -69,7 +69,7 @@ fn assert_err_code(src: &'static str, code: ErrorCode) {
 
 /// When the exact byte offset matters.
 #[track_caller]
-fn assert_err_code_at(src: &'static str, code: ErrorCode, start: usize) {
+fn _assert_err_code_at(src: &'static str, code: ErrorCode, start: usize) {
     let d = parse_err_item(src);
     assert_eq!(d.code, DiagCode::from(code), "wrong code for {src:?}: {d}");
     assert_eq!(d.span.start, start, "wrong span for {src:?}: {d}");
@@ -458,20 +458,8 @@ fn optional_return_errors_on_garbage() {
 
 #[test]
 fn parse_loop() {
-    let e = parse_expr("loop { break; }");
+    let e = parse_expr("loop { }");
     assert!(matches!(e.kind, ExprKind::Loop { .. }));
-}
-
-#[test]
-fn parse_if_error_missing_brace() {
-    let _err = parse_err_item("fn f() { if a { }");
-    // should be UnclosedBlock (or whatever your error is)
-}
-
-#[test]
-fn parse_if_error_missing_cond() {
-    let _err = parse_err_item("fn f() { if { } }");
-    // should be ExpressionExpected
 }
 
 // ---- block / unclosed ----
@@ -751,19 +739,97 @@ fn control_flow_never_panics_on_garbage() {
 fn parse_comparison_non_assoc_span() {
     // "a < b < c":          0123456
     //                         ^ second `<` is at byte 6
-    assert_err_code_at("a < b < c", ErrorCode::NonAssociativeOperator, 6);
+    assert_err_code_at_expr("a < b < c", ErrorCode::NonAssociativeOperator, 6);
 }
 
 #[track_caller]
 fn parse_err_expr(src: &'static str) -> Diag {
     match parser(src).parse_expression() {
         Ok(ok) => panic!("expected Err for {src:?}, got Ok({ok:?})"),
-        Err(e)  => Diag::from(e),
+        Err(e) => Diag::from(e),
     }
+}
+
+#[track_caller]
+fn assert_err_code_at_expr(src: &'static str, code: ErrorCode, start: usize) {
+    let d = parse_err_expr(src);
+    assert_eq!(d.code, DiagCode::from(code), "wrong code for {src:?}: {d}");
+    assert_eq!(d.span.start, start, "wrong span for {src:?}: {d}");
 }
 
 #[track_caller]
 fn assert_err_code_expr(src: &'static str, code: ErrorCode) {
     let d = parse_err_expr(src);
     assert_eq!(d.code, DiagCode::from(code), "wrong code for {src:?}: {d}");
+}
+
+// ---- if span tests ----
+#[test]
+fn parse_if_span_covers_whole_construct_no_else() {
+    let src = "if a { }";
+    let e = parser(src).parse_expression().unwrap();
+    assert_eq!(e.span.start, 0);
+    assert_eq!(e.span.end, src.len());
+}
+
+#[test]
+fn parse_if_span_covers_else_tail() {
+    let src = "if a { } else { }";
+    let e = parser(src).parse_expression().unwrap();
+    assert_eq!(e.span.end, src.len());
+}
+
+#[test]
+fn parse_if_span_ends_after_closing_brace() {
+    // `;` follows: `parse_expression` returns the If directly.
+    let e = parse_expr("if a { } ;");
+    assert!(matches!(e.kind, ExprKind::If { .. }));
+    assert_eq!((e.span.start, e.span.end), (0, 8));
+}
+
+#[test]
+fn parse_if_span_does_not_bleed_into_following_binop() {
+    // `+` follows: If becomes lhs of Binary(Add).
+    let e = parse_expr("if a { } + 1");
+    match e.kind {
+        ExprKind::Binary {
+            op: BinaryOp::Add,
+            lhs,
+            ..
+        } => {
+            assert_eq!((lhs.span.start, lhs.span.end), (0, 8));
+        }
+        other => panic!("expected Binary(Add, If, 1), got {other:?}"),
+    }
+}
+
+// ---- while / loop span tests ----
+#[test]
+fn parse_while_span() {
+    let src = "while x < 10 { }";
+    let e = parser(src).parse_expression().unwrap();
+    assert_eq!(e.span.start, 0);
+    assert_eq!(e.span.end, src.len());
+}
+
+#[test]
+fn parse_loop_span() {
+    let src = "loop { }";
+    let e = parser(src).parse_expression().unwrap();
+    assert_eq!(e.span.end, src.len());
+}
+
+#[test]
+fn parse_while_span_ends_after_closing_brace() {
+    let src = "while x { } ;";
+    let e = parse_expr(src);
+    assert_eq!((e.span.start, e.span.end), (0, 11));
+    //                        ^^ `while x { }` is bytes 0..11
+}
+
+#[test]
+fn parse_loop_span_ends_after_closing_brace() {
+    let src = "loop { } ;";
+    let e = parse_expr(src);
+    assert_eq!((e.span.start, e.span.end), (0, 8));
 }

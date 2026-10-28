@@ -1,7 +1,6 @@
-use crate::item::Param;
+use crate::item::{Block, Param};
 use crate::literal::Literal;
 use crate::pat::Pattern;
-use crate::stmt::Stmt;
 use crate::ty::Type;
 use kowari_diagnostics::Span;
 
@@ -69,12 +68,6 @@ pub enum ExprKind<'src> {
         // true for `..=`
         inclusive: bool,
     },
-}
-
-#[derive(Debug, Clone)]
-pub struct Block<'src> {
-    pub stmts: Vec<Stmt<'src>>,
-    pub span: Span,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

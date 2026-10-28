@@ -112,6 +112,10 @@ impl<'src> Parser<'src> {
                     span: start.merge(end.span),
                 })
             }
+            TokenKind::IfToken => self.parse_if_expr(),
+            TokenKind::WhileToken => self.parse_while_expr(),
+            TokenKind::LoopToken => self.parse_loop_expr(),
+
             _ => Err(ParseError::ExpressionExpected {
                 found: token.kind,
                 span: start,
@@ -264,7 +268,7 @@ impl<'src> Parser<'src> {
         ) {
             return Err(ParseError::NonAssociativeOperator {
                 op: "comparison",
-                span: lhs.span,
+                span: self.current_span(),
             });
         }
 
@@ -322,5 +326,81 @@ impl<'src> Parser<'src> {
                 },
             };
         }
+    }
+
+    fn parse_if_expr(&mut self) -> Result<Expr<'src>, ParseError<'src>> {
+        let start = self.current_span();
+        // Consume the if-token
+        self.advance();
+
+        let condition = self.parse_expression()?;
+        let then_branch = self.parse_block()?;
+
+        let else_branch = if self.check(TokenKind::ElseToken) {
+            self.advance();
+            Some(Box::new(self.parse_else_expr()?))
+        } else {
+            None
+        };
+
+        let end = match &else_branch {
+            Some(expr) => expr.span,
+            None => then_branch.span,
+        };
+
+        Ok(Expr {
+            span: start.merge(end),
+            kind: ExprKind::If {
+                cond: Box::new(condition),
+                then_branch,
+                else_branch,
+            },
+        })
+    }
+
+    fn parse_else_expr(&mut self) -> Result<Expr<'src>, ParseError<'src>> {
+        let token = self.peek_kind();
+        match token {
+            Some(TokenKind::IfToken) => self.parse_if_expr(),
+            Some(TokenKind::LBrace) => {
+                let expr = self.parse_block()?;
+                Ok(Expr {
+                    span: expr.span,
+                    kind: ExprKind::Block(expr),
+                })
+            }
+            _ => Err(ParseError::ExpectedBlockOrIf {
+                found: token.unwrap_or(TokenKind::Eof),
+                span: self.current_span(),
+            }),
+        }
+    }
+    fn parse_while_expr(&mut self) -> Result<Expr<'src>, ParseError<'src>> {
+        let start = self.current_span();
+        // Consume the 'while' token
+        self.advance();
+
+        let condition = self.parse_expression()?;
+        let body = self.parse_block()?;
+
+        Ok(Expr {
+            span: start.merge(body.span),
+            kind: ExprKind::While {
+                cond: Box::new(condition),
+                body,
+            },
+        })
+    }
+    fn parse_loop_expr(&mut self) -> Result<Expr<'src>, ParseError<'src>> {
+        let start = self.current_span();
+        // Consume the 'loop' token
+        self.advance();
+
+        let body = self.parse_block()?;
+
+        Ok(Expr {
+            span: start.merge(body.span),
+            kind: ExprKind::Loop { body },
+        })
     }
 }
