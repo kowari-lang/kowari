@@ -22,13 +22,13 @@ impl<'src> Parser<'src> {
                 if self.check(TokenKind::Semicolon) {
                     let semi = self.advance().unwrap();
                     return Ok(Stmt {
-                        kind: StmtKind::Expr(expr.clone()),
                         span: expr.span.merge(semi.span),
+                        kind: StmtKind::Expr(expr),
                     });
                 }
                 Ok(Stmt {
-                    kind: StmtKind::Expr(expr.clone()),
                     span: expr.span,
+                    kind: StmtKind::Expr(expr),
                 })
             }
         }

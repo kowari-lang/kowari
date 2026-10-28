@@ -143,9 +143,7 @@ impl<'src> Parser<'src> {
             TokenKind::Identifier(name) => {
                 self.advance();
                 Ok(Expr {
-                    kind: ExprKind::Literal {
-                        value: kowari_ast::literal::Literal::Path(name),
-                    },
+                    kind: ExprKind::Path(name),
                     span: start,
                 })
             }
