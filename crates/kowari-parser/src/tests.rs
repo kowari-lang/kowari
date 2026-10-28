@@ -23,9 +23,9 @@ fn parses_empty_function() {
 #[test]
 fn parse_simple_add_function() {
     let text = "fn main(a: i32, b: i32) -> i32 { let sum = a + b; return sum; }";
-    let tokens = kowari_lexer::lex(text).expect("lex");
+    let tokens = kowari_lexer::lex(text).expect("lex failure");
     let mut parser = crate::Parser::new(&tokens);
-    let ast = parser.parse().expect("parse");
+    let ast = parser.parse().expect("parse failure");
     assert_eq!(ast.items.len(), 1);
     let Item::Function(f) = &ast.items[0];
     assert_eq!(f.name, "main");
