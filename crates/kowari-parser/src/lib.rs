@@ -70,21 +70,6 @@ impl<'src> Parser<'src> {
         let end = self.tokens.last().map_or(0, |t| t.span.end);
         Span::new(end, end)
     }
-    fn parse_fn_item(&mut self) -> Result<Function<'src>, ParseError<'src>> {
-        let start = self.expect(TokenKind::Function)?.start;
-        let name = self.expect_ident()?;
-        let params = self.parse_param_list()?;
-        let ret = self.parse_optional_return_type()?;
-        let body = self.parse_block()?;
-        let span = Span::new(start, body.span.end);
-        Ok(Function {
-            name,
-            params,
-            ret,
-            body,
-            span,
-        })
-    }
 
     fn parse_source_file(&mut self) -> Result<SourceFile<'src>, ParseError<'src>> {
         let mut items = Vec::new();
