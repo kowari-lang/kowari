@@ -129,7 +129,10 @@ impl<'src> Parser<'src> {
         let mut depth = 1u32;
         while depth > 0 {
             match self.advance().map(|t| t.kind) {
-                Some(TokenKind::LBrace) => depth += 1,
+                Some(TokenKind::LBrace) => {
+                    depth += 1;
+                    let _ = self.parse_stmt();
+                }
                 Some(TokenKind::RBrace) => {
                     depth -= 1;
                     if depth == 0 {
@@ -240,6 +243,23 @@ impl<'src> Parser<'src> {
     }
 
     fn parse_stmt(&mut self) -> Result<Stmt<'src>, ParseError<'src>> {
-        todo!()
+        let start = self.peek().map(|t| t.span.start).unwrap_or(0);
+
+        match self.advance().map(|t| t.kind) {
+            Some(TokenKind::LetToken) => {
+                Ok(Stmt::Let {
+                    mutable: false,
+                    name: "",
+                    ty: None,
+                    init: None,
+                    span: Default::default(),
+                })
+            }
+            _ => {
+                Err(ParseError::InvalidStatement {
+                    span: Span { start, end: start },
+                })
+            }
+        }
     }
 }
