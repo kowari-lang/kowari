@@ -1,9 +1,14 @@
 use crate::stmt::Stmt;
 use crate::ty::Type;
 use kowari_diagnostics::Span;
+#[derive(Debug, Clone)]
+pub struct Item<'src> {
+    pub span: Span,
+    pub kind: ItemKind<'src>,
+}
 
 #[derive(Debug, Clone)]
-pub enum Item<'src> {
+pub enum ItemKind<'src> {
     Function(Function<'src>),
     // Struct, Enum, … later
 }

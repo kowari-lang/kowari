@@ -43,6 +43,7 @@ pub enum ExprKind<'src> {
     },
     Block(Block<'src>),
     Group(Box<Expr<'src>>),
+    Path(&'src str),
 }
 
 #[derive(Debug, Clone)]

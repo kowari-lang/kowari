@@ -4,7 +4,7 @@ mod expr_parsing;
 mod tests;
 
 use crate::errors::ParseError;
-use kowari_ast::item::{Block, Item, SourceFile};
+use kowari_ast::item::{Block, ItemKind, SourceFile};
 use kowari_ast::item::{Function, Param};
 use kowari_ast::stmt::Stmt;
 use kowari_ast::ty::Type;
@@ -108,9 +108,9 @@ impl<'src> Parser<'src> {
         })
     }
 
-    fn parse_item(&mut self) -> Result<Item<'src>, ParseError<'src>> {
+    fn parse_item(&mut self) -> Result<ItemKind<'src>, ParseError<'src>> {
         match self.peek().map(|t| t.kind) {
-            Some(TokenKind::Function) => self.parse_fn_item().map(Item::Function),
+            Some(TokenKind::Function) => self.parse_fn_item().map(ItemKind::Function),
             Some(other) => Err(ParseError::UnexpectedToken {
                 expected: TokenKind::Function,
                 got: other,
@@ -242,13 +242,8 @@ impl<'src> Parser<'src> {
 
     fn parse_let_stmt(&mut self) -> Result<Stmt<'src>, ParseError<'src>> {
         let start = self.current_span();
-
-        /* TODO: Parse the following
-        // [x] mut
-        // [x] name
-        // [ ] type
-        // [ ] init
-         */
+        // Consume the 'let' token
+        self.advance();
 
         let mutable = self.check(TokenKind::MutToken);
         if mutable {
