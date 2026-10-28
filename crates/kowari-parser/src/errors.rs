@@ -33,6 +33,7 @@ pub enum ParseError<'src> {
 }
 
 impl<'src> ParseError<'src> {
+    #[cfg(test)]
     pub(crate) fn span(&self) -> &Span {
         match self {
             ParseError::UnexpectedToken { span, .. } => span,
