@@ -4,14 +4,14 @@ use kowari_ast::expr::{BinaryOp, Expr, ExprKind, UnaryOp};
 use kowari_lexer::TokenKind;
 
 impl<'src> Parser<'src> {
-    pub(crate) fn parse_expr(&mut self) -> Result<Expr<'src>, ParseError> {
+    pub(crate) fn parse_expr(&mut self) -> Result<Expr<'src>, ParseError<'src>> {
         self.parse_binary_expr(0)
     }
 
     fn parse_binary_expr(&mut self, min_prec: u8) -> Result<Expr<'src>, ParseError<'src>> {
         let mut lhs = self.parse_unary_expr()?;
 
-        while let Some(token) = self.peek() {
+        while let Some(token) = self.peek().copied() {
             let Some((op, prec)) = Self::binary_op(&token.kind) else {
                 break;
             };
@@ -55,12 +55,12 @@ impl<'src> Parser<'src> {
         })
     }
 
-    fn parse_unary_expr(&mut self) -> Result<Expr<'src>, ParseError> {
-        let op = match self.peek().map(|t| t.kind) {
-            Some(TokenKind::Minus)       => Some(UnaryOp::Negative),
+    fn parse_unary_expr(&mut self) -> Result<Expr<'src>, ParseError<'src>> {
+        let op = match self.peek().copied().map(|t| t.kind) {
+            Some(TokenKind::Minus) => Some(UnaryOp::Negative),
             Some(TokenKind::Exclamation) => Some(UnaryOp::Not),
-            Some(TokenKind::Ampersand)   => Some(UnaryOp::Reference),
-            Some(TokenKind::Star)        => Some(UnaryOp::Dereference),
+            Some(TokenKind::Ampersand) => Some(UnaryOp::Reference),
+            Some(TokenKind::Star) => Some(UnaryOp::Dereference),
             _ => None,
         };
         if let Some(op) = op {
@@ -79,14 +79,14 @@ impl<'src> Parser<'src> {
         self.parse_primary_expr()
     }
 
-    fn parse_primary_expr(&mut self) -> Result<Expr<'src>, ParseError> {
+    fn parse_primary_expr(&mut self) -> Result<Expr<'src>, ParseError<'src>> {
         let start = self.current_span();
 
         let Some(token) = self.peek() else {
             return Err(ParseError::ExpressionExpected {
                 found: TokenKind::Eof,
                 span: start,
-            })
+            });
         };
 
         match token.kind {

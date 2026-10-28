@@ -6,7 +6,6 @@ mod tests;
 use crate::errors::ParseError;
 use kowari_ast::item::{Block, Item, SourceFile};
 use kowari_ast::item::{Function, Param};
-use kowari_ast::pat::Pattern;
 use kowari_ast::stmt::Stmt;
 use kowari_ast::ty::Type;
 use kowari_diagnostics::{Diag, Span};
@@ -127,7 +126,6 @@ impl<'src> Parser<'src> {
     fn parse_block(&mut self) -> Result<Block<'src>, ParseError<'src>> {
         let span = self.current_span();
 
-        let mut depth = 1u32;
         self.expect(TokenKind::LBrace)?;
 
         let mut stmts = Vec::new();
@@ -233,11 +231,11 @@ impl<'src> Parser<'src> {
 
     fn parse_stmt(&mut self) -> Result<Stmt<'src>, ParseError<'src>> {
         match self.peek().map(|t| t.kind) {
-            Some(TokenKind::LetToken)    => self.parse_let_stmt(),
+            Some(TokenKind::LetToken) => self.parse_let_stmt(),
             Some(TokenKind::ReturnToken) => self.parse_return_stmt(),
             _ => {
                 let expr = self.parse_expr()?;
-                Ok(Stmt::Expr(expr))          // expression statement
+                Ok(Stmt::Expr(expr)) // expression statement
             }
         }
     }
@@ -292,7 +290,7 @@ impl<'src> Parser<'src> {
             mutable,
             name,
             ty,
-            init: None,
+            init,
             span: start.merge(semi),
         })
     }
@@ -314,7 +312,7 @@ impl<'src> Parser<'src> {
         !self.is_at_end() && self.tokens[self.pos].kind == kind
     }
 
-    fn parse_return_stmt(&mut self) -> Result<Stmt, ParseError> {
+    fn parse_return_stmt(&mut self) -> Result<Stmt<'src>, ParseError<'src>> {
         // Consume the return
         self.advance();
 
