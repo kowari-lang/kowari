@@ -2,7 +2,7 @@ use crate::errors::ParseError;
 use crate::{Parser, SourceFile};
 use kowari_ast::expr::{BinaryOp, ExprKind, UnaryOp};
 use kowari_ast::item::{ItemKind, ReturnType};
-use kowari_ast::stmt::Stmt;
+use kowari_ast::stmt::{Stmt, StmtKind};
 use kowari_ast::ty::Type;
 use kowari_diagnostics::Span;
 use kowari_lexer::{Token, TokenKind, lex};
@@ -29,7 +29,7 @@ fn parse_stmts(body: &str) -> &'static [Stmt<'static>] {
 /// Parses `fn f() { let x = <expr>; }` and returns the initializer.
 fn parse_expr(expr: &str) -> &'static kowari_ast::expr::Expr<'static> {
     match &parse_stmts(&format!("let x = {expr};"))[0] {
-        Stmt::Let { init: Some(e), .. } => e,
+        Stmt { kind: StmtKind::Let {..}, span } => e,
         other => panic!("expected `let` with init, got {other:?}"),
     }
 }
@@ -391,7 +391,7 @@ fn optional_return_parses_simple_type() {
     let rt = parse_optional_ret("-> i32").unwrap().unwrap();
     assert_eq!(rt.span, Span::new(0, 2));
     // The `Type` variant is whatever your `Type::Name` is.
-    matches!(rt.ty, Type::Name { .. });
+    matches!(rt.ty, Type { kind,.. });
 }
 
 #[test]

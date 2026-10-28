@@ -1,70 +1,22 @@
 mod errors;
-mod expr_parsing;
+mod expr;
+mod item;
+mod parser;
+mod stmt;
+mod ty;
+
+pub use errors::ParseError;
+use kowari_ast::item::{Param, ReturnType, SourceFile};
+use kowari_ast::stmt::{Stmt, StmtKind};
+use kowari_ast::ty::TypeKind;
+use kowari_diagnostics::Span;
+use kowari_lexer::TokenKind;
+pub use parser::Parser;
+
 #[cfg(test)]
 mod tests;
 
-use crate::errors::ParseError;
-use kowari_ast::item::{Block, Item, ItemKind, ReturnType, SourceFile};
-use kowari_ast::item::{Function, Param};
-use kowari_ast::stmt::Stmt;
-use kowari_ast::ty::Type;
-use kowari_diagnostics::{Diag, Span};
-use kowari_lexer::{Token, TokenKind};
-
-pub struct Parser<'src> {
-    tokens: &'src [Token<'src>], // the full token stream from the lexer
-    pos: usize,                  // index of the NEXT token to look at,
-}
-
 impl<'src> Parser<'src> {
-    pub fn new(tokens: &'src [Token<'src>]) -> Self {
-        Self { tokens, pos: 0 }
-    }
-
-    pub fn parse(&mut self) -> Result<SourceFile<'src>, Vec<Diag>> {
-        match self.parse_source_file() {
-            // -> Result<_, ParseError>
-            Ok(file) => Ok(file),
-            Err(e) => Err(vec![e.into()]), // From<ParseError> for Diag
-        }
-    }
-
-    // Look at the next token WITHOUT consuming it.
-    pub fn peek(&self) -> Option<&'src Token<'src>> {
-        self._peek_at_n(self.pos)
-    }
-
-    fn _peek_at_n(&self, n: usize) -> Option<&'src Token<'src>> {
-        self.tokens.get(n)
-    }
-
-    // Look ahead N tokens without consuming (useful for disambiguation).
-    pub fn peek_nth(&self, n: usize) -> Option<&'src Token<'src>> {
-        self._peek_at_n(self.pos + n)
-    }
-
-    // Consume and return the next token.
-    pub fn advance(&mut self) -> Option<&'src Token<'src>> {
-        let token = self.tokens.get(self.pos);
-        self.pos += 1;
-        token
-    }
-
-    // Consume the next token, erroring if it's not what we expected.
-    fn expect(&mut self, expected: TokenKind<'src>) -> Result<Span, ParseError<'src>> {
-        match self.advance() {
-            Some(token) if token.kind == expected => Ok(token.span),
-            Some(token) => Err(ParseError::UnexpectedToken {
-                expected,
-                got: token.kind,
-                span: token.span,
-            }),
-            None => Err(ParseError::UnexpectedEof {
-                expected,
-                span: self.eof_span(),
-            }),
-        }
-    }
 
     fn eof_span(&self) -> Span {
         let end = self.tokens.last().map_or(0, |t| t.span.end);
@@ -85,51 +37,6 @@ impl<'src> Parser<'src> {
         Ok(SourceFile {
             items,
             span: Span::new(start, end),
-        })
-    }
-
-    fn parse_item(&mut self) -> Result<Item<'src>, ParseError<'src>> {
-        let start = self.current_span();
-        let kind = match self.peek().copied().map(|t| t.kind) {
-            Some(TokenKind::Function) => ItemKind::Function(self.parse_function()?),
-            Some(found) => {
-                return Err(ParseError::ItemExpected { found, span: start });
-            }
-            None => {
-                return Err(ParseError::UnexpectedEof {
-                    expected: TokenKind::Function,
-                    span: start,
-                });
-            }
-        };
-        let end = self.prev_span();
-        Ok(Item {
-            kind,
-            span: start.merge(end),
-        })
-    }
-
-    fn parse_block(&mut self) -> Result<Block<'src>, ParseError<'src>> {
-        let span = self.current_span();
-
-        self.expect(TokenKind::LBrace)?;
-
-        let mut stmts = Vec::new();
-        while !self.check(TokenKind::RBrace) && !self.is_at_end() {
-            stmts.push(self.parse_stmt()?);
-        }
-
-        if self.is_at_end() {
-            return Err(ParseError::UnexpectedEof {
-                expected: TokenKind::RBrace,
-                span,
-            });
-        }
-        let end = self.expect(TokenKind::RBrace)?;
-
-        Ok(Block {
-            stmts,
-            span: span.merge(end),
         })
     }
 
@@ -198,30 +105,13 @@ impl<'src> Parser<'src> {
         })
     }
 
-    fn parse_type(&mut self) -> Result<Type<'src>, ParseError<'src>> {
-        // Minimal: a bare identifier as a type name (e.g. `i32`, `Foo`)
-        let span = self.peek().map(|t| t.span).unwrap_or_default();
-        match self.advance().map(|t| t.kind) {
-            Some(TokenKind::Identifier(name)) => Ok(Type::Name { name, span }),
-            Some(got) => Err(ParseError::UnexpectedToken {
-                expected: TokenKind::Identifier(""),
-                got,
-                span,
-            }),
-            None => Err(ParseError::UnexpectedEof {
-                expected: TokenKind::Identifier(""),
-                span: self.eof_span(),
-            }),
-        }
-    }
-
-    fn parse_stmt(&mut self) -> Result<Stmt<'src>, ParseError<'src>> {
+    fn parse_stmt(&mut self) -> Result<StmtKind<'src>, ParseError<'src>> {
         match self.peek().map(|t| t.kind) {
             Some(TokenKind::LetToken) => self.parse_let_stmt(),
             Some(TokenKind::ReturnToken) => self.parse_return_stmt(),
             _ => {
                 let expr = self.parse_expr()?;
-                Ok(Stmt::Expr(expr)) // expression statement
+                Ok(StmtKind::Expr(expr)) // expression statement
             }
         }
     }
@@ -245,9 +135,8 @@ impl<'src> Parser<'src> {
             // Consume the ':' then add the type
             self.advance();
             let id = self.expect_ident()?;
-            Some(Type::Name {
+            Some(TypeKind::Name {
                 name: id,
-                span: Span::new(0, 0),
             })
         } else {
             None
@@ -267,7 +156,7 @@ impl<'src> Parser<'src> {
         // Expect a semicolon at the end of the statement
         let semi = self.expect(TokenKind::Semicolon)?;
 
-        Ok(Stmt::Let {
+        Ok(StmtKind::Let {
             mutable,
             name,
             ty,
@@ -280,20 +169,7 @@ impl<'src> Parser<'src> {
         self.pos >= self.tokens.len()
     }
 
-    fn current_span(&self) -> Span {
-        if self.pos < self.tokens.len() {
-            self.tokens[self.pos].span
-        } else {
-            // EOF: zero-width span at the end of the source
-            Span::at(self.tokens.last().map(|t| t.span.end).unwrap_or(0))
-        }
-    }
-
-    fn check(&self, kind: TokenKind) -> bool {
-        !self.is_at_end() && self.tokens[self.pos].kind == kind
-    }
-
-    fn parse_return_stmt(&mut self) -> Result<Stmt<'src>, ParseError<'src>> {
+    fn parse_return_stmt(&mut self) -> Result<StmtKind<'src>, ParseError<'src>> {
         // Consume the return
         self.advance();
 
@@ -304,34 +180,7 @@ impl<'src> Parser<'src> {
         };
 
         self.expect(TokenKind::Semicolon)?;
-        Ok(Stmt::Return(value))
-    }
-
-    fn parse_function(&mut self) -> Result<Function<'src>, ParseError<'src>> {
-        let start = self.current_span();
-        // consume `fn` token
-        self.advance();
-        let name = self.expect_ident()?;
-        let params = self.parse_param_list()?;
-        let ret = self.parse_optional_return_type()?;
-        let body = self.parse_block()?;
-        // `}` of the body
-        let end = self.prev_span();
-        Ok(Function {
-            name,
-            params,
-            body,
-            ret,
-            span: start.merge(end),
-        })
-    }
-
-    fn prev_span(&self) -> Span {
-        if self.pos > 0 {
-            self.tokens[self.pos - 1].span
-        } else {
-            Span::at(0)
-        }
+        Ok(StmtKind::Return(value))
     }
 
     fn parse_optional_return_type(&mut self) -> Result<Option<ReturnType<'src>>, ParseError<'src>> {

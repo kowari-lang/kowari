@@ -3,13 +3,19 @@ use crate::ty::Type;
 use kowari_diagnostics::Span;
 
 #[derive(Debug, Clone)]
-pub enum Stmt<'src> {
+pub struct Stmt<'src> {
+    pub kind: StmtKind<'src>,
+    pub span: Span,
+}
+
+#[derive(Debug, Clone)]
+pub enum StmtKind<'src> {
+    Empty,
     Let {
         mutable: bool,
         name: &'src str,
         ty: Option<Type<'src>>,
         init: Option<Expr<'src>>,
-        span: Span,
     },
     Expr(Expr<'src>),
     Defer(Expr<'src>),
@@ -17,3 +23,4 @@ pub enum Stmt<'src> {
     Return(Option<Expr<'src>>),
     // Return, Assign, etc. come later.
 }
+
