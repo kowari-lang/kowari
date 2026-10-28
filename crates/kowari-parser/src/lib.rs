@@ -246,19 +246,42 @@ impl<'src> Parser<'src> {
         self.advance();
 
         /* TODO: Parse the following
-        // [ ] mut
-        // [ ] name
+        // [x] mut
+        // [x] name
         // [ ] type
         // [ ] init
          */
+
+        let mutable = self.check(TokenKind::Semicolon);
+        if mutable {
+            // Consume the mut token if it exists
+            self.advance();
+        };
+
+        let name = self.expect_ident()?;
+
+        let has_type = self.check(TokenKind::Colon);
+        let ty = if has_type {
+            // Consume the ':' then add the type
+            self.advance();
+            let id = self.expect_ident()?;
+            Some(Type::Name { name: id, span: Span::new(0, 0) })
+        } else {
+            None
+        };
+
+        // There has to be an equals
+        self.expect(TokenKind::Equals)?;
+
+        // Parse the expression
 
         // Expect a semicolon at the end of the statement
         let semi = self.expect(TokenKind::Semicolon)?;
 
         Ok(Stmt::Let {
-            mutable: false,
-            name: "",
-            ty: None,
+            mutable,
+            name,
+            ty,
             init: None,
             span: Default::default(),
         })

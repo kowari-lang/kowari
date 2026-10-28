@@ -4,7 +4,12 @@ use std::path::{Path, PathBuf};
 /// `<repo>/tests/golden`. `CARGO_MANIFEST_DIR` is the declaring package
 /// (`crates/kowari-test-harness`), so two `..` climbs reach the repo root.
 pub fn golden_root() -> PathBuf {
-    Path::new(env!("CARGO_MANIFEST_DIR")).join("../../tests/golden")
+    let manifest = Path::new(env!("CARGO_MANIFEST_DIR"));
+    manifest
+        .parent()          // crates/
+        .and_then(Path::parent) // repo root
+        .expect("CARGO_MANIFEST_DIR has at least two ancestors")
+        .join("tests/golden")
 }
 
 /// `<repo>/tests/golden/<phase>`, e.g. `golden_dir("lexer")`.

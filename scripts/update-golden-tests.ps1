@@ -9,7 +9,7 @@
 
 try {
     $env:UPDATE = "1"
-    cargo test -p kowari-test-harness -- --ignored
+    cargo test -p kowari-test-harness --test ast_golden
 
     if ($LASTEXITCODE -ne 0) {
         Write-Error "cargo test failed with exit code $LASTEXITCODE"

@@ -10,3 +10,14 @@ fn golden_pass() {
         format!("{ast:#?}")
     });
 }
+
+#[test]
+#[ignore = "regenerates .expected files; run with: cargo test -- --ignored"]
+fn update_golden() {
+    run_dir(&golden_dir("ast/pass"), |src| {
+        let tokens = kowari_lexer::lex(src).expect("lex failed");
+        let mut parser = Parser::new(&tokens);
+        let ast = parser.parse().expect("parse failed");
+        format!("{ast:#?}")
+    });
+}
