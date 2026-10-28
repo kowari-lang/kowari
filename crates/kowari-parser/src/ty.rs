@@ -1,5 +1,5 @@
-use kowari_ast::item::ReturnType;
 use crate::{ParseError, Parser};
+use kowari_ast::item::ReturnType;
 use kowari_ast::ty::{Type, TypeKind};
 use kowari_lexer::TokenKind;
 

@@ -1,6 +1,6 @@
 use crate::errors::ParseError;
 use crate::parser::Parser;
-use kowari_ast::item::{Function, Item, ItemKind, Param, ReturnType};
+use kowari_ast::item::{Function, Item, ItemKind, Param};
 use kowari_diagnostics::Span;
 use kowari_lexer::TokenKind;
 
@@ -31,6 +31,7 @@ impl<'src> Parser<'src> {
         // consume `fn` token
         self.advance();
         let name = self.expect_ident()?;
+        let name_span = self.prev_span();
         let params = self.parse_param_list()?;
         let ret = self.parse_optional_return_type()?;
         let body = self.parse_block()?;
@@ -38,6 +39,7 @@ impl<'src> Parser<'src> {
         let end = self.prev_span();
         Ok(Function {
             name,
+            name_span,
             params,
             body,
             ret,
@@ -79,6 +81,7 @@ impl<'src> Parser<'src> {
     fn parse_param(&mut self) -> Result<Param<'src>, ParseError<'src>> {
         let start = self.peek().map(|t| t.span.start).unwrap_or(0);
         let name = self.expect_ident()?;
+        let name_span = self.prev_span();
         // Only if the fixture has typed params:
         let ty = if matches!(self.peek().map(|t| t.kind), Some(TokenKind::Colon)) {
             self.advance();
@@ -88,9 +91,9 @@ impl<'src> Parser<'src> {
         };
         Ok(Param {
             name,
+            name_span,
             ty,
             span: Span::new(start, self.prev_span().end),
         })
     }
-    
 }

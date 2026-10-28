@@ -4,9 +4,17 @@ SourceFile {
             kind: Function(
                 Function {
                     name: "add",
+                    name_span: Span {
+                        start: 3,
+                        end: 6,
+                    },
                     params: [
                         Param {
                             name: "a",
+                            name_span: Span {
+                                start: 7,
+                                end: 8,
+                            },
                             ty: Some(
                                 Type {
                                     kind: Name {
@@ -25,6 +33,10 @@ SourceFile {
                         },
                         Param {
                             name: "b",
+                            name_span: Span {
+                                start: 15,
+                                end: 16,
+                            },
                             ty: Some(
                                 Type {
                                     kind: Name {

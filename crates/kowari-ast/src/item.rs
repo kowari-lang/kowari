@@ -20,6 +20,7 @@ pub enum ItemKind<'src> {
 #[derive(Debug, Clone)]
 pub struct Function<'src> {
     pub name: &'src str,
+    pub name_span: Span,
     pub params: Vec<Param<'src>>,
     pub ret: Option<ReturnType<'src>>,
     pub body: Block<'src>,
@@ -29,6 +30,7 @@ pub struct Function<'src> {
 #[derive(Debug, Clone)]
 pub struct Param<'src> {
     pub name: &'src str,
+    pub name_span: Span,
     pub ty: Option<Type<'src>>,
     pub span: Span,
 }
