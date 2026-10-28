@@ -53,7 +53,7 @@ SourceFile {
                                     end: 29,
                                 },
                             },
-                            span: Span {
+                            arrow: Span {
                                 start: 23,
                                 end: 25,
                             },

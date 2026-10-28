@@ -48,5 +48,5 @@ pub struct Block<'src> {
 #[derive(Clone, Debug)]
 pub struct ReturnType<'src> {
     pub ty: Type<'src>,
-    pub span: Span,
+    pub arrow: Span,
 }

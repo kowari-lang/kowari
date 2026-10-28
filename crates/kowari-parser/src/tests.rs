@@ -315,13 +315,13 @@ fn returns_none_on_empty_input() {
 #[test]
 fn parses_simple_return_type() {
     let rt = parse_optional_ret("-> i32").unwrap().unwrap();
-    assert_eq!((rt.span.start, rt.span.end), (0, 2));
+    assert_eq!((rt.arrow.start, rt.arrow.end), (0, 2));
 }
 
 #[test]
 fn arrow_span_points_at_small_arrow_only() {
     let rt = parse_optional_ret("->  bool").unwrap().unwrap();
-    assert_eq!((rt.span.start, rt.span.end), (0, 2));
+    assert_eq!((rt.arrow.start, rt.arrow.end), (0, 2));
 }
 
 #[test]
@@ -384,7 +384,7 @@ fn optional_return_none_when_no_arrow() {
 #[test]
 fn optional_return_parses_simple_type() {
     let rt = parse_optional_ret("-> i32").unwrap().unwrap();
-    assert_eq!(rt.span, Span::new(0, 2));
+    assert_eq!(rt.arrow, Span::new(0, 2));
     // The `Type` variant is whatever your `Type::Name` is.
     matches!(rt.ty, Type { .. });
 }
