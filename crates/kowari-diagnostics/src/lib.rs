@@ -15,7 +15,7 @@ pub struct Span {
 
 impl Span {
     pub fn merge(&self, new_span: Span) -> Span {
-        Span::new(min(self.start, new_span.end), max(self.start, new_span.end))
+        Span::new(min(self.start, new_span.start), max(self.end, new_span.end))
     }
     pub fn at(index: usize) -> Span {
         Span::new(index, index)
