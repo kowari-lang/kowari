@@ -33,14 +33,14 @@ impl<'src> Parser<'src> {
         let start = self.current_span();
 
         let visibility = if self.check(TokenKind::PubToken) {
+            // consume `pub` token
             self.advance();
             Visibility::Public
         } else {
             Visibility::Private
         };
 
-        // consume `fn` token
-        self.advance();
+        self.expect(TokenKind::Function)?;
         let (name, name_span) = self.expect_ident()?;
         let params = self.parse_param_list()?;
         let ret = self.parse_optional_return_type()?;
