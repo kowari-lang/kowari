@@ -5,7 +5,7 @@ use kowari_ast::pat::PatternKind::Literal;
 use kowari_lexer::TokenKind;
 
 impl<'src> Parser<'src> {
-    fn parse_expr(&mut self) -> Result<Expr<'src>, ParseError> {
+    pub(crate) fn parse_expr(&mut self) -> Result<Expr<'src>, ParseError> {
         self.parse_binary_expr(0)
     }
 

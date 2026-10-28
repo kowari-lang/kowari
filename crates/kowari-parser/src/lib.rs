@@ -1,11 +1,12 @@
 mod errors;
+mod expr_parsing;
 #[cfg(test)]
 mod tests;
-mod expr_parsing;
 
 use crate::errors::ParseError;
 use kowari_ast::item::{Block, Item, SourceFile};
 use kowari_ast::item::{Function, Param};
+use kowari_ast::pat::Pattern;
 use kowari_ast::stmt::Stmt;
 use kowari_ast::ty::Type;
 use kowari_diagnostics::{Diag, Span};
@@ -260,21 +261,35 @@ impl<'src> Parser<'src> {
         };
 
         let name = self.expect_ident()?;
+        let pat = Pattern::Identifier(name);
+        let pat_span = start.merge(self.prev_span());
 
         let has_type = self.check(TokenKind::Colon);
         let ty = if has_type {
             // Consume the ':' then add the type
             self.advance();
             let id = self.expect_ident()?;
-            Some(Type::Name { name: id, span: Span::new(0, 0) })
+            Some(Type::Name {
+                name: id,
+                span: Span::new(0, 0),
+            })
         } else {
             None
         };
 
-        // There has to be an equals
-        self.expect(TokenKind::Equals)?;
-
         // Parse the expression
+        // (optional) `= Expr`
+        let init = if self.check(TokenKind::Equals) {
+            // consume '='
+            self.advance();
+            let expr = self.parse_expr()?;
+            Some(expr)
+        } else {
+            None
+        };
+
+        let semi = self.expect(TokenKind::Semicolon)?;
+        let end_span = semi;
 
         // Expect a semicolon at the end of the statement
         let semi = self.expect(TokenKind::Semicolon)?;
