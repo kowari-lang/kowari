@@ -74,12 +74,7 @@ impl<'src> Parser<'src> {
         let start = self.expect(TokenKind::Function)?.start;
         let name = self.expect_ident()?;
         let params = self.parse_param_list()?;
-        let ret = if matches!(self.peek().map(|t| t.kind), Some(TokenKind::SmallArrow)) {
-            self.advance();
-            Some(self.parse_type()?)
-        } else {
-            None
-        };
+        let ret = self.parse_optional_return_type()?;
         let body = self.parse_block()?;
         let span = Span::new(start, body.span.end);
         Ok(Function {
