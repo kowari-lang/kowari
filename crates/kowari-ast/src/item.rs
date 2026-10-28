@@ -10,7 +10,11 @@ pub struct Item<'src> {
 #[derive(Debug, Clone)]
 pub enum ItemKind<'src> {
     Function(Function<'src>),
-    // Struct, Enum, … later
+    Struct(),
+    Enum(),
+    Trait(),
+    Impl(),
+    // … later
 }
 
 #[derive(Debug, Clone)]

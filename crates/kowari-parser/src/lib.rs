@@ -4,7 +4,7 @@ mod expr_parsing;
 mod tests;
 
 use crate::errors::ParseError;
-use kowari_ast::item::{Block, ItemKind, SourceFile};
+use kowari_ast::item::{Block, Item, SourceFile};
 use kowari_ast::item::{Function, Param};
 use kowari_ast::stmt::Stmt;
 use kowari_ast::ty::Type;
@@ -108,19 +108,25 @@ impl<'src> Parser<'src> {
         })
     }
 
-    fn parse_item(&mut self) -> Result<ItemKind<'src>, ParseError<'src>> {
-        match self.peek().map(|t| t.kind) {
-            Some(TokenKind::Function) => self.parse_fn_item().map(ItemKind::Function),
-            Some(other) => Err(ParseError::UnexpectedToken {
-                expected: TokenKind::Function,
-                got: other,
-                span: self.peek().unwrap().span,
-            }),
-            None => Err(ParseError::UnexpectedEof {
-                expected: TokenKind::Function,
-                span: self.eof_span(),
-            }),
-        }
+    fn parse_item(&mut self) -> Result<Item<'src>, ParseError<'src>> {
+        let start = self.current_span();
+        let kind = match self.peek().copied().map(|t| t.kind) {
+            Some(TokenKind::Function) => self.parse_function()?,
+            Some(found) => {
+                return Err(ParseError::ItemExpected { found, span: start });
+            }
+            None => {
+                return Err(ParseError::UnexpectedEof {
+                    expected: TokenKind::Function,
+                    span: start,
+                });
+            }
+        };
+        let end = self.prev_span();
+        Ok(Item {
+            kind,
+            span: start.merge(end),
+        })
     }
 
     fn parse_block(&mut self) -> Result<Block<'src>, ParseError<'src>> {
@@ -319,5 +325,36 @@ impl<'src> Parser<'src> {
 
         self.expect(TokenKind::Semicolon)?;
         Ok(Stmt::Return(value))
+    }
+
+    fn parse_function(&mut self) -> Result<Function<'src>, ParseError<'src>> {
+        let start = self.current_span();
+        // consume `fn` token
+        self.advance();
+        let name = self.expect_ident()?;
+        let params = self.parse_param_list()?;
+        let ret = self.parse_optional_return_type()?;
+        let body = self.parse_block()?;
+        // `}` of the body
+        let end = self.prev_span();
+        Ok(Function {
+            name,
+            params,
+            body,
+            ret,
+            span: start.merge(end),
+        })
+    }
+
+    fn prev_span(&self) -> Span {
+        if self.pos > 0 {
+            self.tokens[self.pos - 1].span
+        } else {
+            Span::at(0)
+        }
+    }
+
+    fn parse_optional_return_type(&self) -> Result<Option<Type>, ParseError<'src>> {
+        todo!()
     }
 }

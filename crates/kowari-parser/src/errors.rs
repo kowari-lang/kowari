@@ -25,6 +25,10 @@ pub enum ParseError<'src> {
         span: Span,
         found: TokenKind<'src>,
     },
+    ItemExpected {
+        found: TokenKind<'src>,
+        span: Span,
+    },
 }
 
 impl<'src> From<ParseError<'src>> for Diag {
@@ -57,12 +61,17 @@ impl<'src> From<ParseError<'src>> for Diag {
             },
             IdentifierExpected { span, found } => Diag {
                 code: DiagCode::from(ErrorCode::ExpectedToken),
-                message: format!("Expected an identifier but got {found}"),
+                message: format!("Expected an Identifier but got `{found}`"),
                 span,
             },
             ExpressionExpected { span, found } => Diag {
                 code: DiagCode::from(ErrorCode::ExpectedToken),
-                message: format!("Expected an expression but got {found}"),
+                message: format!("Expected an Expression but got `{found}`"),
+                span,
+            },
+            ItemExpected { span, found } => Diag {
+                code: DiagCode::from(ErrorCode::ExpectedToken),
+                message: format!("Expected an Item but got `{found}`"),
                 span,
             },
         }
