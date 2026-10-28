@@ -839,3 +839,32 @@ fn pub_fn_span_covers_pub_keyword() {
     assert_eq!(ast.items[0].span.start, 0);
     assert_eq!(ast.items[0].span.end, src.len());
 }
+
+#[test]
+fn if_let_with_else_block() {
+    let e = parse_expr("if let x = opt { } else { }");
+    match e.kind {
+        ExprKind::IfLet {
+            else_branch: Some(_),
+            ..
+        } => {}
+        _ => panic!(),
+    }
+}
+
+#[test]
+fn if_let_with_else_if() {
+    let e = parse_expr("if let x = opt { } else if c { }");
+    match e.kind {
+        ExprKind::IfLet {
+            else_branch: Some(inner),
+            ..
+        } => assert!(matches!(inner.kind, ExprKind::If { .. })),
+        _ => panic!(),
+    }
+}
+
+#[test]
+fn if_let_missing_equals() {
+    assert_err_code_expr("if let x opt { }", ErrorCode::ExpectedToken);
+}
