@@ -14,6 +14,9 @@ pub enum ParseError<'src> {
     UnclosedBlock {
         span: Span,
     },
+    InvalidStatement {
+        span: Span,
+    }
 }
 
 impl<'src> From<ParseError<'src>> for Diag {
@@ -39,6 +42,11 @@ impl<'src> From<ParseError<'src>> for Diag {
                 span,
                 message: "Unclosed block, expected a closing '}'".to_string(),
             },
+            InvalidStatement { span} => Diag {
+                code: DiagCode::from(ErrorCode::InvalidStatement),
+                span,
+                message: format!("invalid statement `{span}`"),
+            }
         }
     }
 }

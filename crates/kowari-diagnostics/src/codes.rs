@@ -19,6 +19,7 @@ pub enum ErrorCode {
     UnexpectedEof,            // E0011  "unexpected end of input; expected `X`"
     UnexpectedItem,           // E0012  "expected an item, found `Y`"
     UnterminatedBlock,        // E0013  "No closing RightBrace:
+    InvalidStatement,       // E0014
                               // --- add parser / typeck / borrow-check codes as they land ---
 }
 
@@ -40,6 +41,7 @@ impl ErrorCode {
             Self::UnexpectedEof => "E0011",
             Self::UnexpectedItem => "E0012",
             Self::UnterminatedBlock => "E0013",
+            Self::InvalidStatement => "E0014",
         }
     }
 
@@ -71,6 +73,7 @@ impl ErrorCode {
             Self::UnexpectedEof => "unexpected end of input; expected `X`",
             Self::UnexpectedItem => "expected an item, found `Y`",
             Self::UnterminatedBlock => "Unterminated block, expected a closing '}'",
+            Self::InvalidStatement => "invalid statement",
         }
     }
 
@@ -84,6 +87,12 @@ impl ErrorCode {
         Self::BadNumericSeparator,
         Self::RadixWithoutDigits,
         Self::UnterminatedBlockComment,
+        Self::ExpectedToken,
+        Self::ExpectedIdent,
+        Self::UnexpectedEof,
+        Self::UnexpectedItem,
+        Self::UnterminatedBlock,
+        Self::InvalidStatement,
     ];
 
     pub fn from_code(s: &str) -> Option<Self> {
