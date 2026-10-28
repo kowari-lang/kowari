@@ -1,6 +1,7 @@
 mod errors;
 #[cfg(test)]
 mod tests;
+mod expr_parsing;
 
 use crate::errors::ParseError;
 use kowari_ast::item::{Block, Item, SourceFile};
@@ -157,8 +158,8 @@ impl<'src> Parser<'src> {
                     span: token.span,
                 }),
             },
-            None => Err(ParseError::UnexpectedEof {
-                expected: TokenKind::Identifier(""),
+            None => Err(ParseError::IdentifierExpected {
+                found: self.peek().or(Some(&TokenKind::Eof)).unwrap().kind.clone(),
                 span: self.eof_span(),
             }),
         }
@@ -271,12 +272,12 @@ impl<'src> Parser<'src> {
         };
 
         // There has to be an equals
-        //self.expect(TokenKind::Equals)?;
+        self.expect(TokenKind::Equals)?;
 
         // Parse the expression
 
         // Expect a semicolon at the end of the statement
-        //let semi = self.expect(TokenKind::Semicolon)?;
+        let semi = self.expect(TokenKind::Semicolon)?;
 
         Ok(Stmt::Let {
             mutable,

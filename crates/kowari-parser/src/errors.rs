@@ -16,7 +16,15 @@ pub enum ParseError<'src> {
     },
     InvalidStatement {
         span: Span,
-    }
+    },
+    IdentifierExpected {
+        span: Span,
+        found: TokenKind<'src>,
+    },
+    ExpressionExpected {
+        span: Span,
+        found: TokenKind<'src>,
+    },
 }
 
 impl<'src> From<ParseError<'src>> for Diag {
@@ -29,24 +37,34 @@ impl<'src> From<ParseError<'src>> for Diag {
                 span,
             } => Diag {
                 code: DiagCode::from(ErrorCode::ExpectedToken),
-                span,
                 message: format!("expected `{expected:?}`, found `{got:?}`"),
+                span,
             },
             UnexpectedEof { ref expected, span } => Diag {
                 code: DiagCode::from(ErrorCode::UnexpectedEof),
-                span,
                 message: format!("unexpected end of input; expected `{expected:?}`"),
+                span,
             },
             UnclosedBlock { span } => Diag {
                 code: DiagCode::from(ErrorCode::UnterminatedBlock),
-                span,
                 message: "Unclosed block, expected a closing '}'".to_string(),
-            },
-            InvalidStatement { span} => Diag {
-                code: DiagCode::from(ErrorCode::InvalidStatement),
                 span,
+            },
+            InvalidStatement { span } => Diag {
+                code: DiagCode::from(ErrorCode::InvalidStatement),
                 message: format!("invalid statement `{span}`"),
-            }
+                span,
+            },
+            IdentifierExpected { span, found } => Diag {
+                code: DiagCode::from(ErrorCode::ExpectedToken),
+                message: format!("Expected an identifier but got {found}"),
+                span,
+            },
+            ExpressionExpected { span, found } => Diag {
+                code: DiagCode::from(ErrorCode::ExpectedToken),
+                message: format!("Expected an expression but got {found}"),
+                span,
+            },
         }
     }
 }

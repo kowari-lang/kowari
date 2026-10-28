@@ -5,4 +5,5 @@ pub enum Literal<'src> {
     String(&'src str),
     Char(&'src str),
     Boolean(bool),
+    Path(&'src str),
 }
