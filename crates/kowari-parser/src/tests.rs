@@ -2,11 +2,11 @@ use crate::{Parser, SourceFile};
 use kowari_ast::expr::{BinaryOp, ExprKind, UnaryOp};
 use kowari_ast::item::ItemKind;
 use kowari_ast::stmt::Stmt;
-use kowari_lexer::Token;
+use kowari_lexer::{Token, TokenKind, lex};
 
 fn try_parse(src: &str) -> Result<SourceFile<'static>, Vec<kowari_diagnostics::Diag>> {
     let src: &'static str = Box::leak(src.to_string().into_boxed_str());
-    let tokens: &'static [Token<'static>] = Box::leak(kowari_lexer::lex(src)?.into_boxed_slice());
+    let tokens: &'static [Token<'static>] = Box::leak(lex(src)?.into_boxed_slice());
     Parser::new(tokens).parse()
 }
 
@@ -273,4 +273,86 @@ fn function_item_span_covers_whole_function() {
     let ast = parse(src);
     assert_eq!(ast.items[0].span.start, 0);
     assert_eq!(ast.items[0].span.end, src.len());
+}
+
+/// Runs only `parse_optional_return_type` on `src`.
+/// Adjust the Lexer/Parser construction to match your setup.
+fn parse_ret(
+    src: &str,
+) -> Result<Option<(Span, Type<'_>)>, ParseError<'_>> {
+    let tokens: Vec<Token> = Lexer::new(src).collect();
+    let mut parser = Parser::new(&tokens);
+    parser.parse_optional_return_type()
+}
+
+#[test]
+fn returns_none_without_arrow() {
+    // A type-like token at the cursor position must NOT be consumed.
+    let mut parser = {
+        let tokens: Vec<Token> = Lexer::new("i32").collect();
+        Parser::new(&tokens)
+    };
+    let before = parser.position(); // or however you expose current index
+    let result = parser.parse_optional_return_type().unwrap();
+    assert!(result.is_none());
+    assert_eq!(parser.position(), before, "input must not be consumed");
+}
+
+#[test]
+fn returns_none_on_empty_input() {
+    // EOF: check() is false → Ok(None), not an error.
+    let result = parse_ret("");
+    assert!(matches!(result, Ok(None)));
+}
+
+#[test]
+fn parses_simple_return_type() {
+    let (arrow_span, _ty) = parse_ret("-> i32").unwrap().unwrap();
+    // Adjust field names if Span isn't `{ start, end }`.
+    assert_eq!((arrow_span.start, arrow_span.end), (0, 2));
+}
+
+#[test]
+fn arrow_span_points_at_small_arrow_only() {
+    // Confirms the span is `->` and not the following type.
+    let (arrow_span, _ty) = parse_ret("->  bool").unwrap().unwrap();
+    assert_eq!((arrow_span.start, arrow_span.end), (0, 2));
+}
+
+#[test]
+fn parses_nested_return_type() {
+    // Whatever your type grammar supports — pointer, reference,
+    // generic, etc. Use one representative case.
+    assert!(parse_ret("-> &i32").is_ok());
+}
+
+#[test]
+fn errors_on_eof_after_arrow() {
+    // `-> ` with nothing after must be an Err from parse_type().
+    assert!(parse_ret("->").is_err());
+}
+
+#[test]
+fn errors_on_garbage_after_arrow() {
+    // Second `->` is not a valid type start.
+    assert!(parse_ret("-> -> i32").is_err());
+}
+
+#[test]
+fn error_span_after_arrow_points_past_the_arrow() {
+    // The `->` was consumed, so the error should point at the
+    // offending token, not at the arrow itself.
+    let err = parse_ret("-> -> i32").unwrap_err();
+    let span = err.span(); // adjust to your accessor
+    assert!(span.start >= 3, "error should not point at the arrow");
+}
+
+#[test]
+fn does_not_consume_leading_non_arrow_tokens() {
+    // Sanity: a `(` (as in `fn f() { … }`, no return type) must be
+    // left for the caller to consume.
+    let tokens: Vec<Token> = lex("(");
+    let mut parser = Parser::new(&tokens);
+    assert!(parser.parse_optional_return_type().unwrap().is_none());
+    assert!(parser.check(TokenKind::LParen));
 }
