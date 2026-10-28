@@ -1,7 +1,7 @@
+use crate::Parser;
 use crate::errors::ParseError;
-use crate::{Parser, SourceFile};
 use kowari_ast::expr::{BinaryOp, ExprKind, UnaryOp};
-use kowari_ast::item::{ItemKind, ReturnType};
+use kowari_ast::item::{ItemKind, ReturnType, SourceFile};
 use kowari_ast::stmt::{Stmt, StmtKind};
 use kowari_ast::ty::Type;
 use kowari_diagnostics::Span;
@@ -29,21 +29,16 @@ fn parse_stmts(body: &str) -> &'static [Stmt<'static>] {
 /// Parses `fn f() { let x = <expr>; }` and returns the initializer.
 fn parse_expr(expr: &str) -> &'static kowari_ast::expr::Expr<'static> {
     match &parse_stmts(&format!("let x = {expr};"))[0] {
-        Stmt { kind: StmtKind::Let {..}, span } => e,
+        Stmt {
+            kind: StmtKind::Let { init: Some(e), .. },
+            ..
+        } => e,
         other => panic!("expected `let` with init, got {other:?}"),
     }
 }
 
 /// Runs only `parse_optional_return_type` on `src`.
 /// Adjust the Lexer/Parser construction to match your setup.
-fn parse_ret(src: &str) -> Result<Option<ReturnType<'static>>, ParseError<'static>> {
-    let src: &'static str = Box::leak(src.to_string().into_boxed_str());
-    let tokens: &'static [Token<'static>] =
-        Box::leak(lex(src).expect("lex failed").into_boxed_slice());
-
-    Parser::new(tokens).parse_optional_return_type()
-}
-
 fn parse_optional_ret(src: &str) -> Result<Option<ReturnType<'static>>, ParseError<'static>> {
     let src: &'static str = Box::leak(src.to_string().into_boxed_str());
     let tokens: &'static [Token<'static>] =
@@ -219,13 +214,13 @@ fn multiple_unary_operators_stack() {
 #[test]
 fn let_without_init_or_type() {
     let stmts = parse_stmts("let x;");
-    let Stmt::Let {
+    let StmtKind::Let {
         mutable: false,
         name: "x",
         ty: None,
         init: None,
         ..
-    } = &stmts[0]
+    } = &stmts[0].kind
     else {
         panic!("unexpected: {stmts:#?}");
     };
@@ -235,8 +230,8 @@ fn let_without_init_or_type() {
 fn let_mut_sets_flag() {
     let stmts = parse_stmts("let mut x = 1;");
     assert!(matches!(
-        &stmts[0],
-        Stmt::Let {
+        &stmts[0].kind,
+        StmtKind::Let {
             mutable: true,
             name: "x",
             ..
@@ -247,11 +242,11 @@ fn let_mut_sets_flag() {
 #[test]
 fn let_with_type_and_init() {
     let stmts = parse_stmts("let x: i32 = 5;");
-    let Stmt::Let {
+    let StmtKind::Let {
         ty: Some(_),
         init: Some(e),
         ..
-    } = &stmts[0]
+    } = &stmts[0].kind
     else {
         panic!("missing ty/init: {stmts:#?}");
     };
@@ -266,14 +261,14 @@ fn let_with_type_and_init() {
 #[test]
 fn return_with_and_without_value() {
     let stmts = parse_stmts("return 1; return;");
-    assert!(matches!(&stmts[0], Stmt::Return(Some(_))));
-    assert!(matches!(&stmts[1], Stmt::Return(None)));
+    assert!(matches!(&stmts[0].kind, StmtKind::Return(Some(_))));
+    assert!(matches!(&stmts[1].kind, StmtKind::Return(None)));
 }
 
 #[test]
 fn expression_statement() {
     let stmts = parse_stmts("a + b;");
-    assert!(matches!(&stmts[0], Stmt::Expr(_)));
+    assert!(matches!(&stmts[0].kind, StmtKind::Expr(_)));
 }
 
 #[test]
@@ -313,19 +308,19 @@ fn returns_none_without_arrow() {
 #[test]
 fn returns_none_on_empty_input() {
     // EOF: check() is false → Ok(None), not an error.
-    let result = parse_ret("");
+    let result = parse_optional_ret("");
     assert!(matches!(result, Ok(None)));
 }
 
 #[test]
 fn parses_simple_return_type() {
-    let rt = parse_ret("-> i32").unwrap().unwrap();
+    let rt = parse_optional_ret("-> i32").unwrap().unwrap();
     assert_eq!((rt.span.start, rt.span.end), (0, 2));
 }
 
 #[test]
 fn arrow_span_points_at_small_arrow_only() {
-    let rt = parse_ret("->  bool").unwrap().unwrap();
+    let rt = parse_optional_ret("->  bool").unwrap().unwrap();
     assert_eq!((rt.span.start, rt.span.end), (0, 2));
 }
 
@@ -333,31 +328,31 @@ fn arrow_span_points_at_small_arrow_only() {
 fn parses_nested_return_type() {
     // Whatever your type grammar supports — pointer, reference,
     // generic, etc. Use one representative case.
-    assert!(parse_ret("-> &i32").is_ok());
+    assert!(parse_optional_ret("-> &i32").is_ok());
 }
 
 #[test]
 fn parses_bare_return_type() {
-    assert!(parse_ret("-> Foo").is_ok());
+    assert!(parse_optional_ret("-> Foo").is_ok());
 }
 
 #[test]
 fn errors_on_eof_after_arrow() {
     // `-> ` with nothing after must be an Err from parse_type().
-    assert!(parse_ret("->").is_err());
+    assert!(parse_optional_ret("->").is_err());
 }
 
 #[test]
 fn errors_on_garbage_after_arrow() {
     // Second `->` is not a valid type start.
-    assert!(parse_ret("-> -> i32").is_err());
+    assert!(parse_optional_ret("-> -> i32").is_err());
 }
 
 #[test]
 fn error_span_after_arrow_points_past_the_arrow() {
     // The `->` was consumed, so the error should point at the
     // offending token, not at the arrow itself.
-    let err = parse_ret("-> -> i32").unwrap_err();
+    let err = parse_optional_ret("-> -> i32").unwrap_err();
     let span = err.span(); // adjust to your accessor
     assert!(span.start >= 3, "error should not point at the arrow");
 }
@@ -391,7 +386,7 @@ fn optional_return_parses_simple_type() {
     let rt = parse_optional_ret("-> i32").unwrap().unwrap();
     assert_eq!(rt.span, Span::new(0, 2));
     // The `Type` variant is whatever your `Type::Name` is.
-    matches!(rt.ty, Type { kind,.. });
+    matches!(rt.ty, Type { .. });
 }
 
 #[test]

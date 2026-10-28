@@ -14,12 +14,21 @@ impl<'src> Parser<'src> {
         Self { tokens, pos: 0 }
     }
 
-    pub fn parse(&mut self) -> Result<SourceFile<'src>, Vec<Diag>> {
-        match self.parse_source_file() {
-            // -> Result<_, ParseError>
-            Ok(file) => Ok(file),
-            Err(e) => Err(vec![e.into()]), // From<ParseError> for Diag
+    pub fn parse_file(&mut self) -> Result<SourceFile<'src>, ParseError<'src>> {
+        let mut items = Vec::new();
+        let start = self.peek().map(|t| t.span.start).unwrap_or(0);
+        while !matches!(self.peek().map(|t| t.kind), Some(TokenKind::Eof) | None) {
+            items.push(self.parse_item()?);
         }
+        let end = self.eof_span().end;
+        Ok(SourceFile {
+            items,
+            span: Span::new(start, end),
+        })
+    }
+
+    pub fn parse(&mut self) -> Result<SourceFile<'src>, Vec<Diag>> {
+        self.parse_file().map_err(|e| vec![e.into()])
     }
 
     pub(crate) fn peek(&self) -> Option<&Token<'src>> {
@@ -45,13 +54,23 @@ impl<'src> Parser<'src> {
         Some(tok)
     }
 
-    pub(crate) fn expect(&mut self, kind: TokenKind<'src>) -> Result<&'src Token<'src>, ParseError<'src>> {
+    pub(crate) fn expect(
+        &mut self,
+        kind: TokenKind<'src>,
+    ) -> Result<&'src Token<'src>, ParseError<'src>> {
         if self.check(kind) {
             Ok(self.advance().unwrap())
         } else {
             match self.peek() {
-                Some(t) => Err(ParseError::UnexpectedToken { expected: kind, got: t.kind, span: t.span }),
-                None => Err(ParseError::UnexpectedEof { expected: kind, span: self.eof_span() }),
+                Some(t) => Err(ParseError::UnexpectedToken {
+                    expected: kind,
+                    got: t.kind,
+                    span: t.span,
+                }),
+                None => Err(ParseError::UnexpectedEof {
+                    expected: kind,
+                    span: self.eof_span(),
+                }),
             }
         }
     }
@@ -72,11 +91,24 @@ impl<'src> Parser<'src> {
         }
     }
 
-    pub fn parse_file(&mut self) -> Result<SourceFile<'src>, ParseError<'src>> {
-        let mut items = Vec::new();
-        while self.peek().is_some() {
-            items.push(self.parse_item()?);
+    pub(crate) fn eof_span(&self) -> Span {
+        let end = self.tokens.last().map_or(0, |t| t.span.end);
+        Span::new(end, end)
+    }
+
+    pub(crate) fn expect_ident(&mut self) -> Result<&'src str, ParseError<'src>> {
+        match self.advance() {
+            Some(token) => match token.kind {
+                TokenKind::Identifier(name) => Ok(name),
+                found => Err(ParseError::IdentifierExpected {
+                    found,
+                    span: token.span,
+                }),
+            },
+            None => Err(ParseError::UnexpectedEof {
+                expected: TokenKind::Identifier(""),
+                span: self.eof_span(),
+            }),
         }
-        Ok(SourceFile { items, span: Default::default() })
     }
 }

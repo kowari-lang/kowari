@@ -1,33 +1,37 @@
+use crate::{ParseError, Parser};
 use kowari_ast::ty::{Type, TypeKind};
 use kowari_lexer::TokenKind;
-use crate::{ParseError, Parser};
 
 impl<'src> Parser<'src> {
     pub(crate) fn parse_type(&mut self) -> Result<Type<'src>, ParseError<'src>> {
-        // Reference type: `&` [`mut`] Type
         if self.check(TokenKind::Ampersand) {
-            let amp = self.advance().unwrap();
+            let amp_span = self.advance().unwrap().span;
+
             let mutable = if self.check(TokenKind::MutToken) {
                 self.advance();
                 true
             } else {
                 false
             };
+
             let inner = self.parse_type()?;
+            let inner_span = inner.span;
+            let span = amp_span.merge(inner_span);
+
             return Ok(Type {
                 kind: TypeKind::Reference {
                     mutable,
-                    // inner: Box::new(inner),
+                    inner: Box::new(inner),
                 },
-                span: amp.span.merge(inner.span),
+                span,
             });
         }
 
-        // Named type — existing behaviour
         let ident = self.expect_ident()?;
+        let span = self.prev_span();
         Ok(Type {
-            span: ident,
-            kind: TypeKind::Name { name: ident}
+            kind: TypeKind::Name { name: ident },
+            span,
         })
     }
 }
