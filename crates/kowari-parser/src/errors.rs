@@ -1,6 +1,7 @@
 use kowari_diagnostics::{Diag, DiagCode, ErrorCode, Span};
 use kowari_lexer::TokenKind;
 
+#[derive(Debug)]
 pub enum ParseError<'src> {
     UnexpectedToken {
         expected: TokenKind<'src>,
@@ -29,6 +30,20 @@ pub enum ParseError<'src> {
         found: TokenKind<'src>,
         span: Span,
     },
+}
+
+impl<'src> ParseError<'src> {
+    pub(crate) fn span(&self) -> &Span {
+        match self {
+            ParseError::UnexpectedToken { span, .. } => span,
+            ParseError::UnexpectedEof { span, .. } => span,
+            ParseError::UnclosedBlock { span } => span,
+            ParseError::InvalidStatement { span } => span,
+            ParseError::IdentifierExpected { span, .. } => span,
+            ParseError::ExpressionExpected { span, .. } => span,
+            ParseError::ItemExpected { span, .. } => span,
+        }
+    }
 }
 
 impl<'src> From<ParseError<'src>> for Diag {

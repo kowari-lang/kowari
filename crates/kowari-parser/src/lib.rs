@@ -349,19 +349,19 @@ impl<'src> Parser<'src> {
         }
     }
 
-    fn parse_optional_return_type(&mut self) -> Result<Option<ReturnType>, ParseError<'src>> {
+    fn parse_optional_return_type(&mut self) -> Result<Option<ReturnType<'src>>, ParseError<'src>> {
         if !self.check(TokenKind::SmallArrow) {
-            return Ok(None)
+            return Ok(None);
         }
         // Consume the `->` token
         // check() returned true → peek() was Some → advance() yields Some.
-        let arrow_span = self
+        let span = self
             .advance()
             .expect("check() guarantees a token is present")
             .span;
 
         let ty = self.parse_type()?;
 
-        Ok(Some((arrow_span, ty)))
+        Ok(Some(ReturnType { span, ty }))
     }
 }
