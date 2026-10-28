@@ -5,6 +5,7 @@ mod tests;
 use crate::errors::ParseError;
 use kowari_ast::item::{Block, Item, SourceFile};
 use kowari_ast::item::{Function, Param};
+use kowari_ast::stmt::Stmt;
 use kowari_ast::ty::Type;
 use kowari_diagnostics::{Diag, Span};
 use kowari_lexer::{Token, TokenKind};
@@ -236,5 +237,9 @@ impl<'src> Parser<'src> {
                 span: self.eof_span(),
             }),
         }
+    }
+
+    fn parse_stmt(&mut self) -> Result<Stmt<'src>, ParseError<'src>> {
+        todo!()
     }
 }
