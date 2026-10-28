@@ -6,7 +6,7 @@ use std::path::{Path, PathBuf};
 pub fn golden_root() -> PathBuf {
     let manifest = Path::new(env!("CARGO_MANIFEST_DIR"));
     manifest
-        .parent()          // crates/
+        .parent() // crates/
         .and_then(Path::parent) // repo root
         .expect("CARGO_MANIFEST_DIR has at least two ancestors")
         .join("tests/golden")

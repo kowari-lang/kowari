@@ -19,7 +19,7 @@ pub enum ErrorCode {
     UnexpectedEof,            // E0011  "unexpected end of input; expected `X`"
     UnexpectedItem,           // E0012  "expected an item, found `Y`"
     UnterminatedBlock,        // E0013  "No closing RightBrace:
-    InvalidStatement,       // E0014
+    InvalidStatement,         // E0014
                               // --- add parser / typeck / borrow-check codes as they land ---
 }
 
