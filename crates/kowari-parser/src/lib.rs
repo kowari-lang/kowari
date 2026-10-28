@@ -8,5 +8,6 @@ mod ty;
 pub use errors::ParseError;
 pub use parser::Parser;
 
+mod pat;
 #[cfg(test)]
 mod tests;

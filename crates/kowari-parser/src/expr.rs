@@ -115,6 +115,7 @@ impl<'src> Parser<'src> {
             TokenKind::IfToken => self.parse_if_expr(),
             TokenKind::WhileToken => self.parse_while_expr(),
             TokenKind::LoopToken => self.parse_loop_expr(),
+            TokenKind::ForToken => self.parse_for_expr(),
 
             _ => Err(ParseError::ExpressionExpected {
                 found: token.kind,
@@ -144,6 +145,7 @@ impl<'src> Parser<'src> {
                 | TokenKind::IfToken
                 | TokenKind::WhileToken
                 | TokenKind::LoopToken
+                | TokenKind::ForToken
             )
         )
     }
@@ -404,6 +406,26 @@ impl<'src> Parser<'src> {
         Ok(Expr {
             span: start.merge(body.span),
             kind: ExprKind::Loop { body },
+        })
+    }
+
+    fn parse_for_expr(&mut self) -> Result<Expr<'src>, ParseError<'src>> {
+        let start = self.current_span();
+        // Consume the 'for' token
+        self.advance();
+
+        let pattern = self.parse_pattern()?;
+        self.expect(TokenKind::InToken)?;
+        let iter = self.parse_expression()?;
+        let body = self.parse_block()?;
+
+        Ok(Expr {
+            span: start.merge(body.span),
+            kind: ExprKind::For {
+                pat: pattern,
+                iter: Box::new(iter),
+                body,
+            },
         })
     }
 }

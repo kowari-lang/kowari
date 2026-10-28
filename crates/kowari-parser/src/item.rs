@@ -9,7 +9,9 @@ impl<'src> Parser<'src> {
     pub(crate) fn parse_item(&mut self) -> Result<Item<'src>, ParseError<'src>> {
         let start = self.current_span();
         let kind = match self.peek().copied().map(|t| t.kind) {
-            Some(TokenKind::Function) => ItemKind::Function(self.parse_function()?),
+            Some(TokenKind::Function | TokenKind::PubToken) => {
+                ItemKind::Function(self.parse_function()?)
+            }
             Some(found) => {
                 return Err(ParseError::ItemExpected { found, span: start });
             }
@@ -29,6 +31,14 @@ impl<'src> Parser<'src> {
 
     fn parse_function(&mut self) -> Result<Function<'src>, ParseError<'src>> {
         let start = self.current_span();
+
+        let visibility = if self.check(TokenKind::PubToken) {
+            self.advance();
+            Visibility::Public
+        } else {
+            Visibility::Private
+        };
+
         // consume `fn` token
         self.advance();
         let (name, name_span) = self.expect_ident()?;
@@ -40,7 +50,7 @@ impl<'src> Parser<'src> {
         Ok(Function {
             name,
             name_span,
-            visibility: Visibility::Private,
+            visibility,
             params,
             body,
             ret,

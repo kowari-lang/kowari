@@ -576,7 +576,6 @@ fn parse_continue() {
 
 // ---- for ----
 #[test]
-#[ignore = "step 4: for loops"]
 fn parse_for_range() {
     let e = parse_expr("for i in 0..10 { }");
     match e.kind {
@@ -832,4 +831,11 @@ fn parse_loop_span_ends_after_closing_brace() {
     let src = "loop { } ;";
     let e = parse_expr(src);
     assert_eq!((e.span.start, e.span.end), (0, 8));
+}
+#[test]
+fn pub_fn_span_covers_pub_keyword() {
+    let src = "pub fn f() { }";
+    let ast = parse(src);
+    assert_eq!(ast.items[0].span.start, 0);
+    assert_eq!(ast.items[0].span.end, src.len());
 }
