@@ -20,6 +20,7 @@ pub enum ErrorCode {
     UnexpectedItem,           // E0012  "expected an item, found `Y`"
     UnterminatedBlock,        // E0013  "No closing RightBrace:
     InvalidStatement,         // E0014
+    NonAssociativeOperator,   // E0015
                               // --- add parser / typeck / borrow-check codes as they land ---
 }
 
@@ -27,53 +28,55 @@ impl ErrorCode {
     /// The stable wire code. Never change this once shipped — user tooling
     /// and `--explain` links depend on it.
     pub const fn code(self) -> &'static str {
+        use ErrorCode::*;
         match self {
-            Self::UnexpectedToken => "E0001",
-            Self::UnterminatedString => "E0002",
-            Self::UnterminatedChar => "E0003",
-            Self::EmptyChar => "E0004",
-            Self::MultiChar => "E0005",
-            Self::BadNumericSeparator => "E0006",
-            Self::RadixWithoutDigits => "E0007",
-            Self::UnterminatedBlockComment => "E0008",
-            Self::ExpectedToken => "E0009",
-            Self::ExpectedIdent => "E0010",
-            Self::UnexpectedEof => "E0011",
-            Self::UnexpectedItem => "E0012",
-            Self::UnterminatedBlock => "E0013",
-            Self::InvalidStatement => "E0014",
+            UnexpectedToken => "E0001",
+            UnterminatedString => "E0002",
+            UnterminatedChar => "E0003",
+            EmptyChar => "E0004",
+            MultiChar => "E0005",
+            BadNumericSeparator => "E0006",
+            RadixWithoutDigits => "E0007",
+            UnterminatedBlockComment => "E0008",
+            ExpectedToken => "E0009",
+            ExpectedIdent => "E0010",
+            UnexpectedEof => "E0011",
+            UnexpectedItem => "E0012",
+            UnterminatedBlock => "E0013",
+            InvalidStatement => "E0014",
+            NonAssociativeOperator => "E0015",
         }
     }
 
     /// Short human description, used by `kowaric --explain E0001` and docs.
     pub const fn description(self) -> &'static str {
+        use ErrorCode::*;
         match self {
-            Self::UnexpectedToken => {
-                "The lexer encountered a character that does not start any token."
-            }
-            Self::UnterminatedString => {
+            UnexpectedToken => "The lexer encountered a character that does not start any token.",
+            UnterminatedString => {
                 "A string literal was opened with `\"` but never closed before end of file."
             }
-            Self::UnterminatedChar => "A char literal was opened with `'` but never closed.",
-            Self::EmptyChar => "A char literal `''` contains no character.",
-            Self::MultiChar => "A char literal contains more than one character.",
-            Self::BadNumericSeparator => {
-                "A numeric literal has a trailing or doubled `_` separator."
-            }
-            Self::RadixWithoutDigits => {
+            UnterminatedChar => "A char literal was opened with `'` but never closed.",
+            EmptyChar => "A char literal `''` contains no character.",
+            MultiChar => "A char literal contains more than one character.",
+            BadNumericSeparator => "A numeric literal has a trailing or doubled `_` separator.",
+            RadixWithoutDigits => {
                 "A radix prefix (`0x`, `0b`, `0o`) was not followed by any digits."
             }
 
-            Self::UnterminatedBlockComment => {
+            UnterminatedBlockComment => {
                 "A block comment was opened with `/*` but never closed with `*/`."
             }
 
-            Self::ExpectedToken => "expected `X`, found `Y`",
-            Self::ExpectedIdent => "expected an identifier, found `Y`",
-            Self::UnexpectedEof => "unexpected end of input; expected `X`",
-            Self::UnexpectedItem => "expected an item, found `Y`",
-            Self::UnterminatedBlock => "Unterminated block, expected a closing '}'",
-            Self::InvalidStatement => "invalid statement",
+            ExpectedToken => "expected `X`, found `Y`",
+            ExpectedIdent => "expected an identifier, found `Y`",
+            UnexpectedEof => "unexpected end of input; expected `X`",
+            UnexpectedItem => "expected an item, found `Y`",
+            UnterminatedBlock => "Unterminated block, expected a closing '}'",
+            InvalidStatement => "invalid statement",
+            NonAssociativeOperator => {
+                "A non-associative operator was chained, e.g. `a..b..c` or `a == b == c`."
+            }
         }
     }
 
@@ -93,6 +96,7 @@ impl ErrorCode {
         Self::UnexpectedItem,
         Self::UnterminatedBlock,
         Self::InvalidStatement,
+        Self::NonAssociativeOperator,
     ];
 
     pub fn from_code(s: &str) -> Option<Self> {

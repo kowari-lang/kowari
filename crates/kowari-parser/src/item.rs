@@ -1,5 +1,6 @@
 use crate::errors::ParseError;
 use crate::parser::Parser;
+use kowari_ast::Visibility;
 use kowari_ast::item::{Function, Item, ItemKind, Param};
 use kowari_diagnostics::Span;
 use kowari_lexer::TokenKind;
@@ -39,6 +40,7 @@ impl<'src> Parser<'src> {
         Ok(Function {
             name,
             name_span,
+            visibility: Visibility::Private,
             params,
             body,
             ret,

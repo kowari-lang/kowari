@@ -22,5 +22,7 @@ pub enum StmtKind<'src> {
     Defer(Expr<'src>),
     ErrDefer(Expr<'src>),
     Return(Option<Expr<'src>>),
-    // Return, Assign, etc. come later.
+    Break(Option<Box<Expr<'src>>>),
+    Continue,
+    // Assign, etc. come later.
 }

@@ -1,11 +1,79 @@
 use crate::Parser;
 use crate::errors::ParseError;
-use kowari_ast::expr::{BinaryOp, ExprKind, UnaryOp};
-use kowari_ast::item::{ItemKind, ReturnType, SourceFile};
+use kowari_ast::Visibility;
+use kowari_ast::expr::{BinaryOp, Expr, ExprKind, UnaryOp};
+use kowari_ast::item::{Item, ItemKind, ReturnType, SourceFile};
+use kowari_ast::pat::{Pattern, PatternKind};
 use kowari_ast::stmt::{Stmt, StmtKind};
 use kowari_ast::ty::Type;
-use kowari_diagnostics::Span;
+use kowari_diagnostics::{Diag, DiagCode, ErrorCode, Span};
 use kowari_lexer::{Token, TokenKind, lex};
+
+fn parser(src: &'static str) -> Parser<'static> {
+    let tokens = lex(src).unwrap_or_else(|diags| {
+        let joined = diags
+            .iter()
+            .map(|d| d.to_string())
+            .collect::<Vec<_>>()
+            .join("; ");
+        panic!("lexer failed for {src:?}: {joined}")
+    });
+    // Token<'src> borrows from src; leaking the box gives us a 'static slice
+    // that outlives the call. Fine in tests, never in real code.
+    let tokens: &'static [Token<'static>] = Box::leak(tokens.into_boxed_slice());
+    Parser::new(tokens)
+}
+
+fn parse_item(src: &'static str) -> Item<'static> {
+    parser(src).parse_item().unwrap_or_else(|e| {
+        let d = Diag::from(e);
+        panic!("expected Ok for {src:?}, got {d}")
+    })
+}
+
+fn parse_expr(src: &'static str) -> Expr<'static> {
+    parser(src).parse_expression().unwrap_or_else(|e| {
+        let d = Diag::from(e);
+        panic!("expected Ok for {src:?}, got {d}")
+    })
+}
+fn _parse_stmt(src: &'static str) -> Stmt<'static> {
+    parser(src).parse_statement().unwrap_or_else(|e| {
+        let d = Diag::from(e);
+        panic!("expected Ok for {src:?}, got {d}")
+    })
+}
+fn _parse_type(src: &'static str) -> Type<'static> {
+    parser(src).parse_type().unwrap_or_else(|e| {
+        let d = Diag::from(e);
+        panic!("expected Ok for {src:?}, got {d}")
+    })
+}
+
+/// Terse assertion helper — most error tests use this form.
+/// Most error tests use this. Parses as an item by default; add
+/// `parse_err_expr` / `parse_err_stmt` when asserting on expression-level errors.
+#[track_caller]
+fn parse_err_item(src: &'static str) -> Diag {
+    match parser(src).parse_item() {
+        Ok(ok) => panic!("expected Err for {src:?}, got Ok({ok:?})"),
+        Err(e) => Diag::from(e),
+    }
+}
+
+#[track_caller]
+fn assert_err_code(src: &'static str, code: ErrorCode) {
+    let d = parse_err_item(src);
+    assert_eq!(d.code, DiagCode::from(code), "wrong code for {src:?}: {d}");
+}
+
+/// When the exact byte offset matters.
+#[track_caller]
+fn assert_err_code_at(src: &'static str, code: ErrorCode, start: usize) {
+    let d = parse_err_item(src);
+    assert_eq!(d.code, DiagCode::from(code), "wrong code for {src:?}: {d}");
+    assert_eq!(d.span.start, start, "wrong span for {src:?}: {d}");
+}
 
 fn try_parse(src: &str) -> Result<SourceFile<'static>, Vec<kowari_diagnostics::Diag>> {
     let src: &'static str = Box::leak(src.to_string().into_boxed_str());
@@ -26,17 +94,6 @@ fn parse_stmts(body: &str) -> &'static [Stmt<'static>] {
     }
 }
 
-/// Parses `fn f() { let x = <expr>; }` and returns the initializer.
-fn parse_expr(expr: &str) -> &'static kowari_ast::expr::Expr<'static> {
-    match &parse_stmts(&format!("let x = {expr};"))[0] {
-        Stmt {
-            kind: StmtKind::Let { init: Some(e), .. },
-            ..
-        } => e,
-        other => panic!("expected `let` with init, got {other:?}"),
-    }
-}
-
 /// Runs only `parse_optional_return_type` on `src`.
 /// Adjust the Lexer/Parser construction to match your setup.
 fn parse_optional_ret(src: &str) -> Result<Option<ReturnType<'static>>, ParseError<'static>> {
@@ -45,10 +102,6 @@ fn parse_optional_ret(src: &str) -> Result<Option<ReturnType<'static>>, ParseErr
         Box::leak(lex(src).expect("lex failed").into_boxed_slice());
 
     Parser::new(tokens).parse_optional_return_type()
-}
-
-fn parse_err_item(src: &str) -> ParseError {
-    todo!()
 }
 
 #[test]
@@ -404,22 +457,50 @@ fn optional_return_errors_on_garbage() {
 }
 
 #[test]
+fn parse_loop() {
+    let e = parse_expr("loop { break; }");
+    assert!(matches!(e.kind, ExprKind::Loop { .. }));
+}
+
+#[test]
+fn parse_if_error_missing_brace() {
+    let _err = parse_err_item("fn f() { if a { }");
+    // should be UnclosedBlock (or whatever your error is)
+}
+
+#[test]
+fn parse_if_error_missing_cond() {
+    let _err = parse_err_item("fn f() { if { } }");
+    // should be ExpressionExpected
+}
+
+// ---- block / unclosed ----
+#[test]
+fn parse_unclosed_fn_body() {
+    assert_err_code("fn f() {", ErrorCode::UnterminatedBlock);
+}
+
+// ---- if ----
+#[test]
 fn parse_if_no_else() {
     let e = parse_expr("if cond { }");
-    assert!(matches!(e.kind, ExprKind::If {
-        cond: _,
-        then_branch: _,
-        else_branch: None,
-    }));
+    assert!(matches!(
+        e.kind,
+        ExprKind::If {
+            else_branch: None,
+            ..
+        }
+    ));
 }
 
 #[test]
 fn parse_if_else() {
     let e = parse_expr("if a { } else { }");
-    match e.kind.clone() {
-        ExprKind::If { else_branch: Some(b), .. } => {
-            assert!(matches!(b.kind, ExprKind::Block(_)));
-        }
+    match e.kind {
+        ExprKind::If {
+            else_branch: Some(b),
+            ..
+        } => assert!(matches!(b.kind, ExprKind::Block(_))),
         _ => panic!("expected if with else"),
     }
 }
@@ -427,10 +508,43 @@ fn parse_if_else() {
 #[test]
 fn parse_else_if_chain() {
     let e = parse_expr("if a { } else if b { } else { }");
-    // outer If has else_branch = Some(Block/Expr containing another If)
-    // assert the inner If is reachable by descending into the else branch
+    match e.kind {
+        ExprKind::If {
+            else_branch: Some(inner),
+            ..
+        } => assert!(matches!(inner.kind, ExprKind::If { .. })),
+        _ => panic!("expected if chain"),
+    }
 }
 
+#[test]
+fn parse_if_missing_brace() {
+    assert_err_code("fn f() { if a { }", ErrorCode::UnterminatedBlock);
+}
+
+#[test]
+fn parse_if_missing_cond() {
+    assert_err_code("fn f() { if ; { } }", ErrorCode::ExpectedToken);
+}
+
+// ---- if let ----
+#[test]
+fn parse_if_let_ident() {
+    let e = parse_expr("if let x = opt { }");
+    match e.kind {
+        ExprKind::IfLet {
+            pattern:
+                Pattern {
+                    kind: PatternKind::Identifier(name),
+                    ..
+                },
+            ..
+        } => assert_eq!(name, "x"),
+        _ => panic!("expected if let"),
+    }
+}
+
+// ---- while / loop / break / continue ----
 #[test]
 fn parse_while() {
     let e = parse_expr("while x < 10 { }");
@@ -438,26 +552,218 @@ fn parse_while() {
 }
 
 #[test]
-fn parse_loop() {
+fn parse_loop_break() {
     let e = parse_expr("loop { break; }");
-    assert!(matches!(e.kind, ExprKind::Loop { .. }));
+    match e.kind {
+        ExprKind::Loop { body } => {
+            assert_eq!(body.stmts.len(), 1);
+            assert!(matches!(body.stmts[0].kind, StmtKind::Break(None)));
+        }
+        _ => panic!(),
+    }
 }
 
 #[test]
+fn parse_loop_break_with_value() {
+    let e = parse_expr("loop { break 42; }");
+    match e.kind {
+        ExprKind::Loop { body } => match &body.stmts[0].kind {
+            StmtKind::Break(Some(v)) => {
+                assert!(matches!(v.kind, ExprKind::Literal { .. }));
+            }
+            other => panic!("expected break with value, got {other:?}"),
+        },
+        _ => panic!(),
+    }
+}
+
+#[test]
+fn parse_continue() {
+    let e = parse_expr("loop { continue; }");
+    match e.kind {
+        ExprKind::Loop { body } => assert!(matches!(body.stmts[0].kind, StmtKind::Continue)),
+        _ => panic!(),
+    }
+}
+
+// ---- for ----
+#[test]
+#[ignore = "step 4: for loops"]
 fn parse_for_range() {
-    // If you use `a..b` as a Range expression, test that too:
     let e = parse_expr("for i in 0..10 { }");
-    assert!(matches!(e.kind, ExprKind::For { .. }));
+    match e.kind {
+        ExprKind::For { iter, .. } => assert!(matches!(iter.kind, ExprKind::Range { .. })),
+        _ => panic!(),
+    }
 }
 
 #[test]
-fn parse_if_error_missing_brace() {
-    let err = parse_err_item("fn f() { if a { }");
-    // should be UnclosedBlock (or whatever your error is)
+fn parse_for_over_expr() {
+    let e = parse_expr("for x in vec { }");
+    match e.kind {
+        ExprKind::For { iter, .. } => assert!(matches!(iter.kind, ExprKind::Path(_))),
+        _ => panic!(),
+    }
+}
+
+// ---- ranges ----
+#[test]
+fn parse_range_full() {
+    let e = parse_expr("0..10");
+    assert!(matches!(
+        e.kind,
+        ExprKind::Range {
+            start: Some(_),
+            end: Some(_),
+            inclusive: false
+        }
+    ));
 }
 
 #[test]
-fn parse_if_error_missing_cond() {
-    let err = parse_err_item("fn f() { if { } }");
-    // should be ExpressionExpected
+fn parse_range_inclusive() {
+    let e = parse_expr("0..=10");
+    assert!(matches!(
+        e.kind,
+        ExprKind::Range {
+            inclusive: true,
+            ..
+        }
+    ));
+}
+
+#[test]
+fn parse_range_from() {
+    let e = parse_expr("..10");
+    assert!(matches!(
+        e.kind,
+        ExprKind::Range {
+            start: None,
+            end: Some(_),
+            inclusive: false
+        }
+    ));
+}
+
+#[test]
+fn parse_range_to() {
+    let e = parse_expr("0..");
+    assert!(matches!(
+        e.kind,
+        ExprKind::Range {
+            start: Some(_),
+            end: None,
+            ..
+        }
+    ));
+}
+
+#[test]
+fn parse_range_full_open() {
+    let e = parse_expr("..");
+    assert!(matches!(
+        e.kind,
+        ExprKind::Range {
+            start: None,
+            end: None,
+            ..
+        }
+    ));
+}
+
+#[test]
+fn parse_range_lowest_precedence() {
+    // `..` binds looser than `==`, so this is `a..(b == c)`
+    let e = parse_expr("a..b == c");
+    match e.kind {
+        ExprKind::Range { end: Some(rhs), .. } => {
+            assert!(matches!(rhs.kind, ExprKind::Binary { .. }))
+        }
+        _ => panic!(),
+    }
+}
+
+#[test]
+fn parse_range_non_associative() {
+    assert_err_code_expr("a..b..c", ErrorCode::NonAssociativeOperator);
+}
+
+#[test]
+fn parse_range_inclusive_non_associative() {
+    assert_err_code_expr("a..=b..c", ErrorCode::NonAssociativeOperator);
+}
+
+// ---- visibility (Function only in Section A) ----
+#[test]
+fn parse_pub_fn() {
+    let i = parse_item("pub fn f() { }");
+    match i.kind {
+        ItemKind::Function(f) => assert!(matches!(f.visibility, Visibility::Public)),
+        _ => panic!(),
+    }
+}
+
+#[test]
+fn parse_private_fn() {
+    let i = parse_item("fn f() { }");
+    match i.kind {
+        ItemKind::Function(f) => assert!(matches!(f.visibility, Visibility::Private)),
+        _ => panic!(),
+    }
+}
+
+// ---- never panic on garbage ----
+#[test]
+fn control_flow_never_panics_on_garbage() {
+    for src in [
+        "if",
+        "if {",
+        "if a {",
+        "if let {",
+        "if let x {",
+        "while",
+        "while a",
+        "loop",
+        "loop {",
+        "for",
+        "for i",
+        "for i in",
+        "for i in a",
+        "..",
+        "..=",
+        "0..",
+        "..0",
+        "..=..",
+        "a..=b..c",
+        "break",
+        "break 1",
+        "continue",
+        "pub",
+        "pub pub fn f() {}",
+    ] {
+        let _ = std::panic::catch_unwind(|| {
+            let _ = parser(src).parse_item();
+        });
+    }
+}
+
+#[test]
+fn parse_comparison_non_assoc_span() {
+    // "a < b < c":          0123456
+    //                         ^ second `<` is at byte 6
+    assert_err_code_at("a < b < c", ErrorCode::NonAssociativeOperator, 6);
+}
+
+#[track_caller]
+fn parse_err_expr(src: &'static str) -> Diag {
+    match parser(src).parse_expression() {
+        Ok(ok) => panic!("expected Err for {src:?}, got Ok({ok:?})"),
+        Err(e)  => Diag::from(e),
+    }
+}
+
+#[track_caller]
+fn assert_err_code_expr(src: &'static str, code: ErrorCode) {
+    let d = parse_err_expr(src);
+    assert_eq!(d.code, DiagCode::from(code), "wrong code for {src:?}: {d}");
 }

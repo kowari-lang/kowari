@@ -11,3 +11,9 @@ pub mod ty;
 pub struct Ast {
     // TODO: fill in during M1a
 }
+
+#[derive(Clone, Debug)]
+pub enum Visibility {
+    Public,
+    Private,
+}

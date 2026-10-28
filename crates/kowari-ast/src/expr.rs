@@ -1,5 +1,6 @@
 use crate::item::Param;
 use crate::literal::Literal;
+use crate::pat::Pattern;
 use crate::stmt::Stmt;
 use crate::ty::Type;
 use kowari_diagnostics::Span;
@@ -36,6 +37,12 @@ pub enum ExprKind<'src> {
         then_branch: Block<'src>,
         else_branch: Option<Box<Expr<'src>>>,
     },
+    IfLet {
+        pattern: Pattern<'src>,
+        scrutinee: Box<Expr<'src>>,
+        then_branch: Block<'src>,
+        else_branch: Option<Box<Expr<'src>>>,
+    },
     Closure {
         params: Vec<Param<'src>>,
         ret: Option<Type<'src>>,
@@ -44,9 +51,24 @@ pub enum ExprKind<'src> {
     Block(Block<'src>),
     Group(Box<Expr<'src>>),
     Path(&'src str),
-    While,
-    Loop,
-    For,
+    While {
+        cond: Box<Expr<'src>>,
+        body: Block<'src>,
+    },
+    Loop {
+        body: Block<'src>,
+    },
+    For {
+        pat: Pattern<'src>,
+        iter: Box<Expr<'src>>,
+        body: Block<'src>,
+    },
+    Range {
+        start: Option<Box<Expr<'src>>>,
+        end: Option<Box<Expr<'src>>>,
+        // true for `..=`
+        inclusive: bool,
+    },
 }
 
 #[derive(Debug, Clone)]

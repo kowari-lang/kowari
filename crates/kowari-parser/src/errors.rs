@@ -30,6 +30,10 @@ pub enum ParseError<'src> {
         found: TokenKind<'src>,
         span: Span,
     },
+    NonAssociativeOperator {
+        op: &'static str,
+        span: Span,
+    },
 }
 
 impl<'src> ParseError<'src> {
@@ -43,6 +47,7 @@ impl<'src> ParseError<'src> {
             ParseError::IdentifierExpected { span, .. } => span,
             ParseError::ExpressionExpected { span, .. } => span,
             ParseError::ItemExpected { span, .. } => span,
+            ParseError::NonAssociativeOperator { span, .. } => span,
         }
     }
 }
@@ -88,6 +93,11 @@ impl<'src> From<ParseError<'src>> for Diag {
             ItemExpected { span, found } => Diag {
                 code: DiagCode::from(ErrorCode::ExpectedToken),
                 message: format!("Expected an Item but got `{found}`"),
+                span,
+            },
+            NonAssociativeOperator { op, span } => Diag {
+                code: DiagCode::from(ErrorCode::NonAssociativeOperator),
+                message: format!("`{op}` cannot be chained; add parentheses to disambiguate"),
                 span,
             },
         }

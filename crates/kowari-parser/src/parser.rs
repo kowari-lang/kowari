@@ -17,7 +17,7 @@ impl<'src> Parser<'src> {
     pub fn parse_file(&mut self) -> Result<SourceFile<'src>, ParseError<'src>> {
         let mut items = Vec::new();
         let start = self.peek().map(|t| t.span.start).unwrap_or(0);
-        while !matches!(self.peek().map(|t| t.kind), Some(TokenKind::Eof) | None) {
+        while !matches!(self.peek_kind(), Some(TokenKind::Eof) | None) {
             items.push(self.parse_item()?);
         }
         let end = self.eof_span().end;
@@ -33,6 +33,10 @@ impl<'src> Parser<'src> {
 
     pub(crate) fn peek(&self) -> Option<&Token<'src>> {
         self.tokens.get(self.pos)
+    }
+
+    pub(crate) fn peek_kind(&self) -> Option<TokenKind<'src>> {
+        self.peek().map(|t| t.kind)
     }
 
     fn _peek_at_n(&self, n: usize) -> Option<&'src Token<'src>> {

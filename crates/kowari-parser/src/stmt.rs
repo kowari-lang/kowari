@@ -35,12 +35,16 @@ impl<'src> Parser<'src> {
     }
 
     pub(crate) fn parse_block(&mut self) -> Result<Block<'src>, ParseError<'src>> {
-        let open = self.expect(TokenKind::LBrace)?;
+        let open = self.expect(TokenKind::LBrace)?; // assume it's checked first
         let mut stmts = Vec::new();
-        while !self.check(TokenKind::RBrace) && self.peek().is_some() {
+        while !self.check(TokenKind::RBrace) && !self.check(TokenKind::Eof) {
             stmts.push(self.parse_statement()?);
         }
-        let close = self.expect(TokenKind::RBrace)?;
+        // stmt.rs — parse_block
+        if !self.check(TokenKind::RBrace) {
+            return Err(ParseError::UnclosedBlock { span: open.span });
+        }
+        let close = self.advance().unwrap(); // safe: check() just passed
         Ok(Block {
             stmts,
             span: open.span.merge(close.span),
