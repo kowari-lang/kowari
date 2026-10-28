@@ -3,6 +3,7 @@
 mod codes;
 
 pub use codes::ErrorCode;
+use std::cmp::{max, min};
 use std::fmt;
 use std::fmt::Formatter;
 
@@ -10,6 +11,15 @@ use std::fmt::Formatter;
 pub struct Span {
     pub start: usize,
     pub end: usize,
+}
+
+impl Span {
+    pub fn merge(&self, new_span: Span) -> Span {
+        Span::new(min(self.start, new_span.end), max(self.start, new_span.end))
+    }
+    pub fn at(index: usize) -> Span {
+        Span::new(index, index)
+    }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

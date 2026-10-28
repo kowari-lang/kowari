@@ -123,39 +123,27 @@ impl<'src> Parser<'src> {
     }
 
     fn parse_block(&mut self) -> Result<Block<'src>, ParseError<'src>> {
-        let start = self.expect(TokenKind::LBrace)?.start;
+        let span = self.current_span();
 
-        // TODO(step 3): loop { parse_stmt() } until RBrace
         let mut depth = 1u32;
-        while depth > 0 {
-            match self.advance().map(|t| t.kind) {
-                Some(TokenKind::LBrace) => {
-                    depth += 1;
-                    let _ = self.parse_stmt();
-                }
-                Some(TokenKind::RBrace) => {
-                    depth -= 1;
-                    if depth == 0 {
-                        let end = self.tokens[self.pos - 1].span.end;
-                        return Ok(Block {
-                            stmts: Vec::new(),
-                            span: Span::new(start, end),
-                        });
-                    }
-                }
-                Some(TokenKind::Eof) | None => {
-                    return Err(ParseError::UnclosedBlock {
-                        span: self.eof_span(),
-                    });
-                }
-                _ => {}
-            }
+        self.expect(TokenKind::LBrace)?;
+
+        let mut stmts = Vec::new();
+        while !self.check(TokenKind::RBrace) && !self.is_at_end() {
+            stmts.push(self.parse_stmt()?);
         }
 
-        let end = self.tokens[self.pos - 1].span.end;
+        if self.is_at_end() {
+            return Err(ParseError::UnexpectedEof {
+                expected: TokenKind::RBrace,
+                span,
+            });
+        }
+        let end = self.expect(TokenKind::RBrace)?;
+
         Ok(Block {
-            stmts: Vec::new(),
-            span: Span::new(start, end),
+            stmts,
+            span: span.merge(end),
         })
     }
 
@@ -246,20 +234,50 @@ impl<'src> Parser<'src> {
         let start = self.peek().map(|t| t.span.start).unwrap_or(0);
 
         match self.advance().map(|t| t.kind) {
-            Some(TokenKind::LetToken) => {
-                Ok(Stmt::Let {
-                    mutable: false,
-                    name: "",
-                    ty: None,
-                    init: None,
-                    span: Default::default(),
-                })
-            }
-            _ => {
-                Err(ParseError::InvalidStatement {
-                    span: Span { start, end: start },
-                })
-            }
+            Some(TokenKind::LetToken) => self.parse_let_stmt(),
+            _ => Err(ParseError::InvalidStatement {
+                span: Span { start, end: start },
+            }),
         }
+    }
+
+    fn parse_let_stmt(&mut self) -> Result<Stmt<'src>, ParseError<'src>> {
+        let start = self.current_span();
+        self.advance();
+
+        /* TODO: Parse the following
+        // [ ] mut
+        // [ ] name
+        // [ ] type
+        // [ ] init
+         */
+
+        // Expect a semicolon at the end of the statement
+        let semi = self.expect(TokenKind::Semicolon)?;
+
+        Ok(Stmt::Let {
+            mutable: false,
+            name: "",
+            ty: None,
+            init: None,
+            span: Default::default(),
+        })
+    }
+
+    fn is_at_end(&self) -> bool {
+        self.pos >= self.tokens.len()
+    }
+
+    fn current_span(&self) -> Span {
+        if self.pos < self.tokens.len() {
+            self.tokens[self.pos].span
+        } else {
+            // EOF: zero-width span at the end of the source
+            Span::at(self.tokens.last().map(|t| t.span.end).unwrap_or(0))
+        }
+    }
+
+    fn check(&self, kind: TokenKind) -> bool {
+        !self.is_at_end() && self.tokens[self.pos].kind == kind
     }
 }
