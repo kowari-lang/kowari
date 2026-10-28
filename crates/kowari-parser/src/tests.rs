@@ -34,12 +34,22 @@ fn parse_expr(expr: &str) -> &'static kowari_ast::expr::Expr<'static> {
     }
 }
 
+/// Runs only `parse_optional_return_type` on `src`.
+/// Adjust the Lexer/Parser construction to match your setup.
+fn parse_ret(src: &str) -> Result<Option<ReturnType<'static>>, ParseError<'static>> {
+    let src: &'static str = Box::leak(src.to_string().into_boxed_str());
+    let tokens: &'static [Token<'static>] =
+        Box::leak(lex(src).expect("lex failed").into_boxed_slice());
+
+    Parser::new(tokens).parse_optional_return_type()
+}
+
 fn parse_optional_ret(src: &str) -> Result<Option<ReturnType<'static>>, ParseError<'static>> {
     let src: &'static str = Box::leak(src.to_string().into_boxed_str());
-    let tokens: &'static [Token<'static>] = Box::leak(lex(src)?.into_boxed_slice());
+    let tokens: &'static [Token<'static>] =
+        Box::leak(lex(src).expect("lex failed").into_boxed_slice());
 
-    let mut parser = Parser::new(tokens);
-    parser.parse_optional_return_type()
+    Parser::new(tokens).parse_optional_return_type()
 }
 
 #[test]
@@ -286,23 +296,16 @@ fn function_item_span_covers_whole_function() {
     assert_eq!(ast.items[0].span.end, src.len());
 }
 
-/// Runs only `parse_optional_return_type` on `src`.
-/// Adjust the Lexer/Parser construction to match your setup.
-fn parse_ret(src: &str) -> Result<Option<(Span, Type<'_>)>, ParseError<'_>> {
-    let tokens = lex(src).expect("failed to lex");
-    let mut parser = Parser::new(&tokens);
-    parser.parse_optional_return_type()
-}
-
 #[test]
 fn returns_none_without_arrow() {
-    // A type-like token at the cursor position must NOT be consumed.
-    let mut parser = {
-        let tokens = lex("i32").expect("failed to lex");
-        Parser::new(&tokens)
-    };
-    let before = parser.pos; // or however you expose current index
+    let src: &'static str = "i32";
+    let tokens: &'static [Token<'static>] =
+        Box::leak(lex(src).expect("lex failed").into_boxed_slice());
+
+    let mut parser = Parser::new(tokens);
+    let before = parser.pos;
     let result = parser.parse_optional_return_type().unwrap();
+
     assert!(result.is_none());
     assert_eq!(parser.pos, before, "input must not be consumed");
 }
@@ -316,16 +319,14 @@ fn returns_none_on_empty_input() {
 
 #[test]
 fn parses_simple_return_type() {
-    let (arrow_span, _ty) = parse_ret("-> i32").unwrap().unwrap();
-    // Adjust field names if Span isn't `{ start, end }`.
-    assert_eq!((arrow_span.start, arrow_span.end), (0, 2));
+    let rt = parse_ret("-> i32").unwrap().unwrap();
+    assert_eq!((rt.span.start, rt.span.end), (0, 2));
 }
 
 #[test]
 fn arrow_span_points_at_small_arrow_only() {
-    // Confirms the span is `->` and not the following type.
-    let (arrow_span, _ty) = parse_ret("->  bool").unwrap().unwrap();
-    assert_eq!((arrow_span.start, arrow_span.end), (0, 2));
+    let rt = parse_ret("->  bool").unwrap().unwrap();
+    assert_eq!((rt.span.start, rt.span.end), (0, 2));
 }
 
 #[test]
@@ -333,6 +334,11 @@ fn parses_nested_return_type() {
     // Whatever your type grammar supports — pointer, reference,
     // generic, etc. Use one representative case.
     assert!(parse_ret("-> &i32").is_ok());
+}
+
+#[test]
+fn parses_bare_return_type() {
+    assert!(parse_ret("-> Foo").is_ok());
 }
 
 #[test]
@@ -358,10 +364,11 @@ fn error_span_after_arrow_points_past_the_arrow() {
 
 #[test]
 fn does_not_consume_leading_non_arrow_tokens() {
-    // Sanity: a `(` (as in `fn f() { … }`, no return type) must be
-    // left for the caller to consume.
-    let tokens = lex("(");
-    let mut parser = Parser::new(&tokens);
+    let src: &'static str = "(";
+    let tokens: &'static [Token<'static>] =
+        Box::leak(lex(src).expect("lex failed").into_boxed_slice());
+
+    let mut parser = Parser::new(tokens);
     assert!(parser.parse_optional_return_type().unwrap().is_none());
     assert!(parser.check(TokenKind::LParen));
 }
