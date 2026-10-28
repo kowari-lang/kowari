@@ -28,7 +28,7 @@ pub enum ParseError<'src> {
 }
 
 impl<'src> From<ParseError<'src>> for Diag {
-    fn from(e: ParseError) -> Self {
+    fn from(e: ParseError<'src>) -> Self {
         use ParseError::*;
         match e {
             UnexpectedToken {

@@ -153,14 +153,13 @@ impl<'src> Parser<'src> {
         match self.advance() {
             Some(token) => match token.kind {
                 TokenKind::Identifier(name) => Ok(name),
-                got => Err(ParseError::UnexpectedToken {
-                    expected: TokenKind::Identifier(""),
-                    got,
+                found => Err(ParseError::IdentifierExpected {
+                    found,
                     span: token.span,
                 }),
             },
-            None => Err(ParseError::IdentifierExpected {
-                found: self.peek().or(Some(&TokenKind::Eof)).unwrap().kind.clone(),
+            None => Err(ParseError::UnexpectedEof {
+                expected: TokenKind::Identifier(""),
                 span: self.eof_span(),
             }),
         }
@@ -233,19 +232,18 @@ impl<'src> Parser<'src> {
     }
 
     fn parse_stmt(&mut self) -> Result<Stmt<'src>, ParseError<'src>> {
-        let start = self.peek().map(|t| t.span.start).unwrap_or(0);
-
-        match self.advance().map(|t| t.kind) {
-            Some(TokenKind::LetToken) => self.parse_let_stmt(),
-            _ => Err(ParseError::InvalidStatement {
-                span: Span { start, end: start },
-            }),
+        match self.peek().map(|t| t.kind) {
+            Some(TokenKind::LetToken)    => self.parse_let_stmt(),
+            Some(TokenKind::ReturnToken) => self.parse_return_stmt(),
+            _ => {
+                let expr = self.parse_expr()?;
+                Ok(Stmt::Expr(expr))          // expression statement
+            }
         }
     }
 
     fn parse_let_stmt(&mut self) -> Result<Stmt<'src>, ParseError<'src>> {
         let start = self.current_span();
-        self.advance();
 
         /* TODO: Parse the following
         // [x] mut
@@ -254,18 +252,17 @@ impl<'src> Parser<'src> {
         // [ ] init
          */
 
-        let mutable = self.check(TokenKind::Semicolon);
+        let mutable = self.check(TokenKind::MutToken);
         if mutable {
             // Consume the mut token if it exists
             self.advance();
         };
 
         let name = self.expect_ident()?;
-        let pat = Pattern::Identifier(name);
-        let pat_span = start.merge(self.prev_span());
+        //let pat = Pattern::Identifier(name);
+        //let pat_span = start.merge(self.prev_span());
 
-        let has_type = self.check(TokenKind::Colon);
-        let ty = if has_type {
+        let ty = if self.check(TokenKind::Colon) {
             // Consume the ':' then add the type
             self.advance();
             let id = self.expect_ident()?;
@@ -288,9 +285,6 @@ impl<'src> Parser<'src> {
             None
         };
 
-        let semi = self.expect(TokenKind::Semicolon)?;
-        let end_span = semi;
-
         // Expect a semicolon at the end of the statement
         let semi = self.expect(TokenKind::Semicolon)?;
 
@@ -299,7 +293,7 @@ impl<'src> Parser<'src> {
             name,
             ty,
             init: None,
-            span: Default::default(),
+            span: start.merge(semi),
         })
     }
 
@@ -318,5 +312,19 @@ impl<'src> Parser<'src> {
 
     fn check(&self, kind: TokenKind) -> bool {
         !self.is_at_end() && self.tokens[self.pos].kind == kind
+    }
+
+    fn parse_return_stmt(&mut self) -> Result<Stmt, ParseError> {
+        // Consume the return
+        self.advance();
+
+        let value = if self.check(TokenKind::Semicolon) {
+            None
+        } else {
+            Some(self.parse_expr()?)
+        };
+
+        self.expect(TokenKind::Semicolon)?;
+        Ok(Stmt::Return(value))
     }
 }

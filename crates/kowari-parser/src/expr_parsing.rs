@@ -1,7 +1,6 @@
 use crate::Parser;
 use crate::errors::ParseError;
 use kowari_ast::expr::{BinaryOp, Expr, ExprKind, UnaryOp};
-use kowari_ast::pat::PatternKind::Literal;
 use kowari_lexer::TokenKind;
 
 impl<'src> Parser<'src> {
@@ -9,15 +8,20 @@ impl<'src> Parser<'src> {
         self.parse_binary_expr(0)
     }
 
-    fn parse_binary_expr(&mut self, min_prec: u8) -> Result<Expr<'src>, ParseError> {
+    fn parse_binary_expr(&mut self, min_prec: u8) -> Result<Expr<'src>, ParseError<'src>> {
         let mut lhs = self.parse_unary_expr()?;
 
-        while let Some((op, prec)) = Self::binary_op(&self.peek().unwrap().kind) {
+        while let Some(token) = self.peek() {
+            let Some((op, prec)) = Self::binary_op(&token.kind) else {
+                break;
+            };
             if prec < min_prec {
                 break;
             }
-            self.advance(); // consume the operator
-            let rhs = self.parse_binary_expr(prec + 1)?; // left-assoc
+
+            // Consume the left token
+            self.advance();
+            let rhs = self.parse_binary_expr(prec + 1)?;
             let span = lhs.span.merge(rhs.span);
             lhs = Expr {
                 kind: ExprKind::Binary {
@@ -34,14 +38,14 @@ impl<'src> Parser<'src> {
     fn binary_op(kind: &TokenKind) -> Option<(BinaryOp, u8)> {
         use TokenKind::*;
         Some(match kind {
-            PipePipe => (BinaryOp::Or, 1),
-            AmpAmp => (BinaryOp::And, 2),
-            EqEq => (BinaryOp::Equal, 3),
-            NotEq => (BinaryOp::NotEqual, 3),
-            Lt => (BinaryOp::LessThan, 4),
-            LtEq => (BinaryOp::LessThanEquals, 4),
-            Gt => (BinaryOp::GreaterThan, 4),
-            GtEq => (BinaryOp::GreaterThanEquals, 4),
+            DoublePipe => (BinaryOp::Or, 1),
+            DoubleAnd => (BinaryOp::And, 2),
+            DoubleEquals => (BinaryOp::Equal, 3),
+            NotEquals => (BinaryOp::NotEqual, 3),
+            LessThan => (BinaryOp::LessThan, 4),
+            LessOrEquals => (BinaryOp::LessThanEquals, 4),
+            GreaterThan => (BinaryOp::GreaterThan, 4),
+            GreaterOrEquals => (BinaryOp::GreaterThanEquals, 4),
             Plus => (BinaryOp::Add, 5),
             Minus => (BinaryOp::Sub, 5),
             Star => (BinaryOp::Mul, 6),
@@ -52,11 +56,11 @@ impl<'src> Parser<'src> {
     }
 
     fn parse_unary_expr(&mut self) -> Result<Expr<'src>, ParseError> {
-        let op = match self.peek().unwrap().kind {
-            TokenKind::Minus => Some(UnaryOp::Negative),
-            TokenKind::Exclamation => Some(UnaryOp::Not),
-            TokenKind::Ampersand => Some(UnaryOp::Reference),
-            TokenKind::Star => Some(UnaryOp::Dereference),
+        let op = match self.peek().map(|t| t.kind) {
+            Some(TokenKind::Minus)       => Some(UnaryOp::Negative),
+            Some(TokenKind::Exclamation) => Some(UnaryOp::Not),
+            Some(TokenKind::Ampersand)   => Some(UnaryOp::Reference),
+            Some(TokenKind::Star)        => Some(UnaryOp::Dereference),
             _ => None,
         };
         if let Some(op) = op {
@@ -77,12 +81,20 @@ impl<'src> Parser<'src> {
 
     fn parse_primary_expr(&mut self) -> Result<Expr<'src>, ParseError> {
         let start = self.current_span();
-        match self.peek().unwrap().kind.clone() {
+
+        let Some(token) = self.peek() else {
+            return Err(ParseError::ExpressionExpected {
+                found: TokenKind::Eof,
+                span: start,
+            })
+        };
+
+        match token.kind {
             TokenKind::Integer(v) => {
                 self.advance();
                 Ok(Expr {
                     kind: ExprKind::Literal {
-                        value: kowari_ast::literal::Literal::Integer(v)
+                        value: kowari_ast::literal::Literal::Integer(v),
                     },
                     span: start,
                 })
@@ -91,7 +103,7 @@ impl<'src> Parser<'src> {
                 self.advance();
                 Ok(Expr {
                     kind: ExprKind::Literal {
-                        value: kowari_ast::literal::Literal::Float(v)
+                        value: kowari_ast::literal::Literal::Float(v),
                     },
                     span: start,
                 })
@@ -100,7 +112,7 @@ impl<'src> Parser<'src> {
                 self.advance();
                 Ok(Expr {
                     kind: ExprKind::Literal {
-                        value: kowari_ast::literal::Literal::String(v)
+                        value: kowari_ast::literal::Literal::String(v),
                     },
                     span: start,
                 })
@@ -109,7 +121,7 @@ impl<'src> Parser<'src> {
                 self.advance();
                 Ok(Expr {
                     kind: ExprKind::Literal {
-                        value: kowari_ast::literal::Literal::Char(v)
+                        value: kowari_ast::literal::Literal::Char(v),
                     },
                     span: start,
                 })
@@ -136,7 +148,7 @@ impl<'src> Parser<'src> {
                 self.advance();
                 Ok(Expr {
                     kind: ExprKind::Literal {
-                        value: kowari_ast::literal::Literal::Path(name)
+                        value: kowari_ast::literal::Literal::Path(name),
                     },
                     span: start,
                 })
@@ -151,7 +163,7 @@ impl<'src> Parser<'src> {
                 })
             }
             _ => Err(ParseError::ExpressionExpected {
-                found: self.peek().unwrap().kind.clone(),
+                found: token.kind,
                 span: start,
             }),
         }
