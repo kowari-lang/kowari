@@ -12,5 +12,8 @@ pub enum Stmt<'src> {
         span: Span,
     },
     Expr(Expr<'src>),
+    Defer(Expr<'src>),
+    ErrDefer(Expr<'src>),
+    Return(Option<Expr<'src>>),
     // Return, Assign, etc. come later.
 }
