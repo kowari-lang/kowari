@@ -44,6 +44,9 @@ pub enum ExprKind<'src> {
     Block(Block<'src>),
     Group(Box<Expr<'src>>),
     Path(&'src str),
+    While,
+    Loop,
+    For,
 }
 
 #[derive(Debug, Clone)]

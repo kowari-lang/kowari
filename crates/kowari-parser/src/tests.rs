@@ -47,6 +47,10 @@ fn parse_optional_ret(src: &str) -> Result<Option<ReturnType<'static>>, ParseErr
     Parser::new(tokens).parse_optional_return_type()
 }
 
+fn parse_err_item(src: &str) -> ParseError {
+    todo!()
+}
+
 #[test]
 #[allow(irrefutable_let_patterns)] // Item currently only has Function so it's always true
 fn parses_empty_function() {
@@ -397,4 +401,63 @@ fn optional_return_errors_on_eof() {
 #[test]
 fn optional_return_errors_on_garbage() {
     assert!(parse_optional_ret("-> -> i32").is_err());
+}
+
+#[test]
+fn parse_if_no_else() {
+    let e = parse_expr("if cond { }");
+    assert!(matches!(e.kind, ExprKind::If {
+        cond: _,
+        then_branch: _,
+        else_branch: None,
+    }));
+}
+
+#[test]
+fn parse_if_else() {
+    let e = parse_expr("if a { } else { }");
+    match e.kind.clone() {
+        ExprKind::If { else_branch: Some(b), .. } => {
+            assert!(matches!(b.kind, ExprKind::Block(_)));
+        }
+        _ => panic!("expected if with else"),
+    }
+}
+
+#[test]
+fn parse_else_if_chain() {
+    let e = parse_expr("if a { } else if b { } else { }");
+    // outer If has else_branch = Some(Block/Expr containing another If)
+    // assert the inner If is reachable by descending into the else branch
+}
+
+#[test]
+fn parse_while() {
+    let e = parse_expr("while x < 10 { }");
+    assert!(matches!(e.kind, ExprKind::While { .. }));
+}
+
+#[test]
+fn parse_loop() {
+    let e = parse_expr("loop { break; }");
+    assert!(matches!(e.kind, ExprKind::Loop { .. }));
+}
+
+#[test]
+fn parse_for_range() {
+    // If you use `a..b` as a Range expression, test that too:
+    let e = parse_expr("for i in 0..10 { }");
+    assert!(matches!(e.kind, ExprKind::For { .. }));
+}
+
+#[test]
+fn parse_if_error_missing_brace() {
+    let err = parse_err_item("fn f() { if a { }");
+    // should be UnclosedBlock (or whatever your error is)
+}
+
+#[test]
+fn parse_if_error_missing_cond() {
+    let err = parse_err_item("fn f() { if { } }");
+    // should be ExpressionExpected
 }
