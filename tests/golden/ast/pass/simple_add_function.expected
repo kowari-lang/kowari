@@ -8,6 +8,7 @@ SourceFile {
                         start: 3,
                         end: 6,
                     },
+                    visibility: Private,
                     params: [
                         Param {
                             name: "a",
