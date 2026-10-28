@@ -4,7 +4,7 @@ mod expr_parsing;
 mod tests;
 
 use crate::errors::ParseError;
-use kowari_ast::item::{Block, Item, SourceFile};
+use kowari_ast::item::{Block, Item, ItemKind, ReturnType, SourceFile};
 use kowari_ast::item::{Function, Param};
 use kowari_ast::stmt::Stmt;
 use kowari_ast::ty::Type;
@@ -111,7 +111,7 @@ impl<'src> Parser<'src> {
     fn parse_item(&mut self) -> Result<Item<'src>, ParseError<'src>> {
         let start = self.current_span();
         let kind = match self.peek().copied().map(|t| t.kind) {
-            Some(TokenKind::Function) => self.parse_function()?,
+            Some(TokenKind::Function) => ItemKind::Function(self.parse_function()?),
             Some(found) => {
                 return Err(ParseError::ItemExpected { found, span: start });
             }
@@ -354,7 +354,19 @@ impl<'src> Parser<'src> {
         }
     }
 
-    fn parse_optional_return_type(&self) -> Result<Option<Type>, ParseError<'src>> {
-        todo!()
+    fn parse_optional_return_type(&mut self) -> Result<Option<ReturnType>, ParseError<'src>> {
+        if !self.check(TokenKind::SmallArrow) {
+            return Ok(None)
+        }
+        // Consume the `->` token
+        // check() returned true → peek() was Some → advance() yields Some.
+        let arrow_span = self
+            .advance()
+            .expect("check() guarantees a token is present")
+            .span;
+
+        let ty = self.parse_type()?;
+
+        Ok(Some((arrow_span, ty)))
     }
 }

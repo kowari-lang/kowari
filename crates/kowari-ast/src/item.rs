@@ -3,8 +3,8 @@ use crate::ty::Type;
 use kowari_diagnostics::Span;
 #[derive(Debug, Clone)]
 pub struct Item<'src> {
-    pub span: Span,
     pub kind: ItemKind<'src>,
+    pub span: Span,
 }
 
 #[derive(Debug, Clone)]
@@ -21,7 +21,7 @@ pub enum ItemKind<'src> {
 pub struct Function<'src> {
     pub name: &'src str,
     pub params: Vec<Param<'src>>,
-    pub ret: Option<Type<'src>>,
+    pub ret: Option<ReturnType<'src>>,
     pub body: Block<'src>,
     pub span: Span,
 }
@@ -42,5 +42,11 @@ pub struct SourceFile<'src> {
 #[derive(Debug, Clone)]
 pub struct Block<'src> {
     pub stmts: Vec<Stmt<'src>>, // may be an empty stub for now
+    pub span: Span,
+}
+
+#[derive(Clone, Debug)]
+pub struct ReturnType<'src> {
+    pub ty: Type<'src>,
     pub span: Span,
 }
