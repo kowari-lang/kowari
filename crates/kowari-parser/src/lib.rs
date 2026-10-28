@@ -271,12 +271,12 @@ impl<'src> Parser<'src> {
         };
 
         // There has to be an equals
-        self.expect(TokenKind::Equals)?;
+        //self.expect(TokenKind::Equals)?;
 
         // Parse the expression
 
         // Expect a semicolon at the end of the statement
-        let semi = self.expect(TokenKind::Semicolon)?;
+        //let semi = self.expect(TokenKind::Semicolon)?;
 
         Ok(Stmt::Let {
             mutable,
