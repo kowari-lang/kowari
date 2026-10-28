@@ -2,7 +2,10 @@ use crate::{Parser, SourceFile};
 use kowari_ast::expr::{BinaryOp, ExprKind, UnaryOp};
 use kowari_ast::item::ItemKind;
 use kowari_ast::stmt::Stmt;
+use kowari_ast::ty::Type;
+use kowari_diagnostics::Span;
 use kowari_lexer::{Token, TokenKind, lex};
+use crate::errors::ParseError;
 
 fn try_parse(src: &str) -> Result<SourceFile<'static>, Vec<kowari_diagnostics::Diag>> {
     let src: &'static str = Box::leak(src.to_string().into_boxed_str());
@@ -280,7 +283,7 @@ fn function_item_span_covers_whole_function() {
 fn parse_ret(
     src: &str,
 ) -> Result<Option<(Span, Type<'_>)>, ParseError<'_>> {
-    let tokens: Vec<Token> = Lexer::new(src).collect();
+    let tokens: Vec<Token> = lex(src);
     let mut parser = Parser::new(&tokens);
     parser.parse_optional_return_type()
 }
@@ -289,13 +292,13 @@ fn parse_ret(
 fn returns_none_without_arrow() {
     // A type-like token at the cursor position must NOT be consumed.
     let mut parser = {
-        let tokens: Vec<Token> = Lexer::new("i32").collect();
+        let tokens: Vec<Token> = lex("i32");
         Parser::new(&tokens)
     };
-    let before = parser.position(); // or however you expose current index
+    let before = parser.pos; // or however you expose current index
     let result = parser.parse_optional_return_type().unwrap();
     assert!(result.is_none());
-    assert_eq!(parser.position(), before, "input must not be consumed");
+    assert_eq!(parser.pos, before, "input must not be consumed");
 }
 
 #[test]
